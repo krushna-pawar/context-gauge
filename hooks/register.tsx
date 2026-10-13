@@ -12,6 +12,8 @@ const COLORS: Record<Tone, string> = {
   track: '#3A3A3A',
 }
 const BORDER = '#D97757'
+// The desktop's bar thickness, in rows.
+const BAR_HEIGHT = 0.25
 
 const EMPTY: Snap = {
   model: null,
@@ -160,7 +162,6 @@ export const register: Register = on => {
         </Text>
       )
       const sep = <Text color={COLORS.muted}>│</Text>
-      const cells = (n: number) => '━'.repeat(n)
       const { left, right } = ends(data)
       // Context gets 40% of the bar room, as on the terminal.
       const weights = [4, 3, 3]
@@ -172,14 +173,12 @@ export const register: Register = on => {
             <Box flexDirection="row" alignItems="center" columnGap={1} flexGrow={fit.bars ? weights[i] : 0} flexShrink={1} minWidth={0}>
               <Box flexShrink={0}>{span({ text: g.label, tone: 'muted' })}</Box>
               {fit.bars ? (
-                <Box flexDirection="row" flexGrow={1} width={0} minWidth={3} height={1} overflow="hidden">
-                  {g.pct !== null && g.pct > 0 ? (
-                    <Box width={`${Math.min(100, g.pct)}%`} minWidth={1} flexShrink={0} height={1} overflow="hidden">
-                      <Text color={COLORS.accent}>{cells(400)}</Text>
-                    </Box>
-                  ) : null}
-                  <Box flexGrow={1} width={0} height={1} overflow="hidden">
-                    <Text color={COLORS.track}>{cells(400)}</Text>
+                // A thin strip, not a run of ━: the desktop sets glyphs in a proportional font.
+                <Box flexGrow={1} width={0} minWidth={3} height={1} alignItems="center">
+                  <Box flexGrow={1} height={BAR_HEIGHT} backgroundColor={COLORS.track} flexDirection="row" overflow="hidden">
+                    {g.pct !== null && g.pct > 0 ? (
+                      <Box width={`${Math.min(100, Math.max(2, g.pct))}%`} height="100%" backgroundColor={COLORS.accent} />
+                    ) : null}
                   </Box>
                 </Box>
               ) : null}

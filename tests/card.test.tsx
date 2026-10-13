@@ -184,7 +184,7 @@ describe('band', () => {
     expect(tree.props?.flexDirection).toBe('row')
     expect(tree.props?.width).toBe(150)
     expect(tree.props?.borderStyle).toBe('round')
-    const text = flat(tree)
+    const text = flat(tree as RenderNode)
     for (const part of ['OPUS 5.5', 'CTX', '6%', '60.9k', '1.0M', '5H', '4%', '7D', '40%', 'MEDIUM', 'AUTO']) expect(text).toContain(part)
     // The 4% bar still shows a filled part.
     const fills: unknown[] = []
@@ -194,7 +194,7 @@ describe('band', () => {
       if (typeof el.props?.width === 'string') fills.push(el.props.width)
       ;(el.children ?? []).forEach(walk)
     }
-    walk(tree)
+    walk(tree as RenderNode)
     expect(fills).toEqual(['6%', '4%', '40%'])
   })
 
