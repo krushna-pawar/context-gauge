@@ -56,7 +56,7 @@ describe('band', () => {
     expect(box.props?.borderColor).toBe('#D97757')
     expect(box.props?.width).toBe(150)
     expect(rows.length).toBe(1)
-    expect(rows[0]!.startsWith('—  │  CTX ')).toBe(true)
+    expect(rows[0]!).toMatch(/^— +│ +CTX +— ━+/)
     expect(rows[0]!.endsWith('— / —')).toBe(true)
   })
 
@@ -82,7 +82,7 @@ describe('band', () => {
     const { box, rows } = await draw($, 150, { isWorking: true })
     expect(rows.length).toBe(1)
     expect(rows[0]!.length).toBe(inner(box))
-    expect(rows[0]!).toMatch(/^OPUS 5\.5  │  CTX ━+  42%   84\.1k \/ 200k  │  5H ━+  31%  │  7D ━+  92%  │  HIGH \/ AUTO$/)
+    expect(rows[0]!).toMatch(/^OPUS 5\.5 +│ +CTX 42% ━+  84\.1k \/ 200k +│ +5H 31% ━+ +│ +7D 92% ━+ +│ +HIGH \/ AUTO$/)
     expect(rows[0]!).not.toContain('$')
   })
 
@@ -105,7 +105,7 @@ describe('band', () => {
     await $.session.start({ source: 'clear', cwd: '/work' } as never)
 
     const { rows } = await draw($, 150)
-    expect(rows[0]!).toMatch(/^OPUS 5\.5  │  CTX ━+ +— +— \/ 200k  │  5H ━+  31%  │  7D ━+  92%  │  HIGH \/ PLAN$/)
+    expect(rows[0]!).toMatch(/^OPUS 5\.5 +│ +CTX +— ━+  — \/ 200k +│ +5H 31% ━+ +│ +7D 92% ━+ +│ +HIGH \/ PLAN$/)
   })
 
   test('settings seed effort and mode before any request or prompt', async ($, on) => {
