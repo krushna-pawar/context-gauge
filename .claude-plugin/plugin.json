@@ -7,5 +7,6 @@
     "name": "Krushna",
     "url": "https://github.com/krushna-pawar"
   },
-  "repository": "https://github.com/krushna-pawar/context-gauge"
+  "repository": "https://github.com/krushna-pawar/context-gauge",
+  "license": "MIT"
 }

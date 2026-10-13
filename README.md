@@ -34,3 +34,7 @@ claude plugin test .
 
 After changing the code, bump `version` in `.claude-plugin/plugin.json` and run
 `claude plugin marketplace update context-gauge && claude plugin update context-gauge@context-gauge`.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
