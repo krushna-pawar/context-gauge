@@ -28,7 +28,7 @@ const EMPTY: Snap = {
   limits: [],
 }
 
-const SNAP = { plugin: 'main-card', key: 'snap' } as const
+const SNAP = { plugin: 'context-gauge', key: 'snap' } as const
 const snap = atom(SNAP, EMPTY)
 
 const patch = ($: EngineInterface, change: Partial<Snap>) =>

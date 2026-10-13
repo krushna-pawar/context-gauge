@@ -1,5 +1,13 @@
 {
-  "name": "main-card-local",
-  "owner": { "name": "krushna" },
-  "plugins": [{ "name": "main-card", "source": "./" }]
+  "name": "context-gauge",
+  "owner": {
+    "name": "krushna"
+  },
+  "plugins": [
+    {
+      "name": "context-gauge",
+      "source": "./"
+    }
+  ],
+  "description": "A one-line card above the Claude Code prompt: model, context window, 5h/7d usage, effort and mode."
 }

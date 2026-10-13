@@ -1,6 +1,11 @@
 {
-  "name": "main-card",
-  "version": "0.3.2",
+  "name": "context-gauge",
+  "version": "0.4.0",
   "description": "A single-line status rail above the prompt: model, context, 5h/7d usage, effort and mode.",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Krushna",
+    "url": "https://github.com/krushna-pawar"
+  },
+  "repository": "https://github.com/krushna-pawar/context-gauge"
 }

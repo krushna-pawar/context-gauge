@@ -15,6 +15,6 @@ export type Snap = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'main-card': { snap: Snap }
+    'context-gauge': { snap: Snap }
   }
 }

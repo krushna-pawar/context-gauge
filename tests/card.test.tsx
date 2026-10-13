@@ -15,7 +15,7 @@ const flat = (node: RenderNode): string =>
   typeof node === 'string' ? node : ((node as { children?: RenderNode[] }).children ?? []).map(flat).join('')
 
 const draw = async ($: Engine, columns: number, extra = {}, surface: 'terminal' | 'desktop' = 'terminal') => {
-  const ui = await $.ui.mount({ plugin: 'main-card', surface, component: 'AbovePrompt', props: props(columns, extra) })
+  const ui = await $.ui.mount({ plugin: 'context-gauge', surface, component: 'AbovePrompt', props: props(columns, extra) })
   const tree = await ui.drawn()
   await ui.unmount()
   const box = tree as { type: string; props?: Record<string, unknown>; children?: RenderNode[] }
@@ -210,7 +210,7 @@ describe('band', () => {
       const { Text } = $.ui.resolve(e)
       return <Text>survey</Text>
     })
-    const ui = await $.ui.mount({ plugin: 'main-card', surface: 'terminal', component: 'AbovePrompt', props: props(100, { hasSurvey: true }) })
+    const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'AbovePrompt', props: props(100, { hasSurvey: true }) })
     expect(await ui.find({ type: 'Text', text: /survey/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /CTX/ })).toBeUndefined()
     await ui.unmount()

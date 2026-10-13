@@ -1,4 +1,4 @@
-# main-card
+# context-gauge
 
 A Claude Code mod that puts a one-line status card above the prompt:
 
@@ -19,7 +19,7 @@ count and then the bars as space runs out. It also draws in the Claude desktop a
 In a Claude Code terminal session, run:
 
 ```
-/plugin install main-card --marketplace krushna-pawar/claude-main-card
+/plugin install context-gauge --marketplace krushna-pawar/context-gauge
 ```
 
 Answer `y` to add the marketplace, then press Enter to install for your user. The card shows up
@@ -33,4 +33,4 @@ claude plugin test .
 ```
 
 After changing the code, bump `version` in `.claude-plugin/plugin.json` and run
-`claude plugin marketplace update main-card-local && claude plugin update main-card@main-card-local`.
+`claude plugin marketplace update context-gauge && claude plugin update context-gauge@context-gauge`.
