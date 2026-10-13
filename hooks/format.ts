@@ -7,11 +7,6 @@ export type CardInput = Snap
 export type Card = { width: number; inner: number; paddingX: number; rows: Row[]; fit: Fit }
 
 const MIN_BAR = 3
-// Bars stay short so each reading reads as one group: BASE_BAR cells, growing past that only
-// while every divider keeps about GAP cells either side; the rest becomes space between groups.
-const BASE_BAR = 12
-const MAX_BAR = 24
-const GAP = 4
 const CRITICAL = 90
 const DASH = '—'
 
@@ -100,7 +95,8 @@ export function gauges(s: CardInput, fit: Fit): Gauge[] {
   const used = value(s.ctxTokens === null ? null : fmtTokens(s.ctxTokens))
   const tokens: Row = fit.tokens
     ? [
-        spaces(2),
+        // Keep the bar's length steady as the used figure grows from "9.5k" to "84.1k".
+        spaces(2 + 6 - used.text.length),
         { ...used, tone: 'muted' },
         seg(' / ', 'muted'),
         { ...value(s.ctxWindow === null ? null : fmtTokens(s.ctxWindow)), tone: 'muted' },
@@ -116,13 +112,17 @@ export function gauges(s: CardInput, fit: Fit): Gauge[] {
   ]
 }
 
-// Label and reading side by side, then the bar: `CTX  5% ━━━━━━━━━━━━━━━━  48.1k / 1.0M`.
-const gauge = (g: Gauge, width: number | null): Row => [
-  seg(g.label, 'muted'),
-  ...percent(g.pct),
-  ...(width === null ? [] : [spaces(1), ...bar(g.pct, width)]),
-  ...g.tail,
-]
+const gauge = (g: Gauge, width: number | null): Row =>
+  width === null
+    ? [seg(g.label, 'muted'), ...percent(g.pct), ...g.tail]
+    : [seg(g.label, 'muted'), spaces(1), ...bar(g.pct, width), spaces(1), ...percent(g.pct), ...g.tail]
+
+// Context takes 40% of the free cells; the 5h and 7d bars share the rest.
+function split(free: number): number[] {
+  const ctx = Math.round(free * 0.4)
+  const five = Math.floor((free - ctx) / 2)
+  return [ctx, five, free - ctx - five]
+}
 
 const upper = (v: string | null): Seg =>
   v === null ? seg(DASH, 'muted') : { text: v.toUpperCase(), tone: 'accent', bold: true }
@@ -144,23 +144,16 @@ function rail(s: CardInput, inner: number, fit: Fit, force = false): Row | null 
     return [left, ...gs.flatMap((g, i) => [...sepAt(i), ...gauge(g, widths[i] ?? null)]), ...sepAt(gs.length), ...right]
   }
 
-  const slots = (gs.length + 1) * 2
-  const spread = (pad: number) =>
-    Array.from({ length: slots }, (_, i) => Math.floor(Math.max(0, pad) / slots) + (i < Math.max(0, pad) % slots ? 1 : 0))
-  const fill = (widths: (number | null)[]) => {
-    const pad = inner - rowLength(build(widths))
-    return pad < 0 ? null : build(widths, spread(pad))
-  }
-
   if (fit.bars) {
-    const room = inner - rowLength(build([0, 0, 0])) - slots * (GAP - fit.gap)
-    for (let n = Math.min(MAX_BAR, Math.max(BASE_BAR, Math.floor(room / 3))); n >= MIN_BAR; n--) {
-      const row = fill([n, n, n])
-      if (row) return row
-    }
-    return null
+    const free = inner - rowLength(build([0, 0, 0]))
+    const widths = split(free)
+    if (widths.some(w => w < MIN_BAR)) return null
+    return build(widths)
   }
-  return fill([null, null, null]) ?? (force ? build([null, null, null]) : null)
+  const pad = inner - rowLength(build([null, null, null]))
+  if (pad < 0 && !force) return null
+  const slots = (gs.length + 1) * 2
+  return build([null, null, null], Array.from({ length: slots }, (_, i) => Math.floor(Math.max(0, pad) / slots) + (i < Math.max(0, pad) % slots ? 1 : 0)))
 }
 
 // One full-width line: model │ CTX bar │ 5H bar │ 7D bar │ EFFORT / MODE.

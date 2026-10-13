@@ -98,7 +98,7 @@ describe('rail', () => {
     expect(card.width).toBe(160)
     expect(text.length).toBe(1)
     expect(text[0]!.length).toBe(card.inner)
-    expect(text[0]!).toMatch(/^OPUS 5\.5 +│ +CTX 42% ━+  84\.1k \/ 200k +│ +5H 31% ━+ +│ +7D 12% ━+ +│ +HIGH \/ DEFAULT$/)
+    expect(text[0]!).toMatch(/^OPUS 5\.5  │  CTX ━+  42%   84\.1k \/ 200k  │  5H ━+  31%  │  7D ━+  12%  │  HIGH \/ DEFAULT$/)
   })
 
   test('every filled bar is accent, never another tone', () => {
@@ -107,10 +107,8 @@ describe('rail', () => {
     expect(fills.map(s => s.tone)).toEqual(['accent', 'track', 'accent', 'track', 'accent', 'track'])
   })
 
-  test('bars are one length, grow with the width up to a cap, and spare room goes to the gaps', () => {
-    expect(barCells(FULL, 160) > barCells(FULL, 110)).toBe(true)
-    expect(barCells(FULL, 400)).toBe(3 * 24)
-    expect(lines(FULL, 400).text[0]!).toMatch(/CTX 42% ━{24}  84\.1k/)
+  test('bars grow with the width and the context bar is the longest', () => {
+    expect(barCells(FULL, 200) > barCells(FULL, 120)).toBe(true)
     const row = buildCard(FULL, 140).rows[0]!
     const bars: number[] = []
     let run = 0
@@ -119,7 +117,8 @@ describe('rail', () => {
       else if (run > 0) (bars.push(run), (run = 0))
     }
     expect(bars.length).toBe(3)
-    expect(new Set(bars).size).toBe(1)
+    expect(bars[0]! > bars[1]!).toBe(true)
+    expect(bars[0]! > bars[2]!).toBe(true)
   })
 
   test('fills the inner width exactly, never wider, at any width', () => {
@@ -145,7 +144,7 @@ describe('rail', () => {
 
   test('missing data shows a dash, never a guess', () => {
     const { text } = lines(EMPTY, 160)
-    expect(text[0]!).toMatch(/^— +│ +CTX +— ━+/)
+    expect(text[0]!.startsWith('—  │  CTX ')).toBe(true)
     expect(text[0]!).toContain('— / —')
     expect(text[0]!).not.toContain('%')
     expect(text[0]!.endsWith('— / —')).toBe(true)
@@ -158,7 +157,7 @@ describe('rail', () => {
 
   test('no subscription windows: 5H and 7D show a dash', () => {
     const t = lines({ ...FULL, limits: [{ kind: 'spend_limit', percentUsed: 50 }] }, 160).text[0]!
-    expect(t).toMatch(/5H +— ━+ +│ +7D +— ━+ +│/)
+    expect(t).toMatch(/5H ━+ +—  │  7D ━+ +—  │/)
   })
 
   test('mode names are shown as words, upper-cased', () => {
