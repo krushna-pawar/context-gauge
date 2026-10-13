@@ -19,12 +19,9 @@ const EMPTY: Snap = {
   model: null,
   effort: null,
   mode: null,
-  requests: 0,
-  requestsPartial: false,
   ctxTokens: null,
   ctxWindow: null,
   ctxPercent: null,
-  costUsd: null,
   limits: [],
 }
 
@@ -35,11 +32,10 @@ const patch = ($: EngineInterface, change: Partial<Snap>) =>
   update($, snap, s => ({ ...EMPTY, ...s, ...change }))
 
 // The status line's figures, as pushed by session.measure or read by $.session.usage().
-const fromUsage = (u: Pick<SessionUsage, 'context' | 'rateLimits' | 'cost'>): Partial<Snap> => ({
+const fromUsage = (u: Pick<SessionUsage, 'context' | 'rateLimits'>): Partial<Snap> => ({
   ctxTokens: u.context.tokens ?? null,
   ctxWindow: u.context.window ?? null,
   ctxPercent: u.context.percent ?? null,
-  costUsd: u.cost?.usd ?? null,
   limits: u.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed })),
 })
 
@@ -68,15 +64,7 @@ const noteMode = async ($: EngineInterface, e: { agent_id?: string; permission_m
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    const [name, usage, turns, held, set] = await Promise.all([
-      model($),
-      $.session.usage().catch(() => null),
-      $.session.turns().catch(() => 0),
-      $.state.get(SNAP),
-      settings($),
-    ])
-    // A reload keeps the count; a first load into a running session cannot see earlier requests.
-    const isFirstLoad = held.value === undefined
+    const [name, usage, set] = await Promise.all([model($), $.session.usage().catch(() => null), settings($)])
     // Settings only seed what nothing has reported yet: a request's effort and a hook's mode are truer.
     await update($, snap, s => {
       const was = { ...EMPTY, ...s }
@@ -84,7 +72,6 @@ export const register: Register = on => {
         ...was,
         model: name,
         ...(usage ? fromUsage(usage) : {}),
-        ...(isFirstLoad ? { requestsPartial: turns > 0 } : {}),
         // A fresh session may not have measured the account's windows yet; the last ones still hold.
         limits: usage?.rateLimits.length ? (fromUsage(usage).limits ?? []) : was.limits,
         effort: was.effort ?? effortIn(set),
@@ -96,15 +83,7 @@ export const register: Register = on => {
 
   // /clear empties the conversation, not the account: the 5h/7d windows, model, effort and mode stand.
   on('session.end', { reason: 'clear' }, async ($, e, next) => {
-    await update($, snap, s => ({
-      ...EMPTY,
-      ...s,
-      requests: 0,
-      requestsPartial: false,
-      ctxTokens: null,
-      ctxPercent: null,
-      costUsd: null,
-    }))
+    await patch($, { ctxTokens: null, ctxPercent: null })
     return next(e)
   })
 
@@ -114,12 +93,7 @@ export const register: Register = on => {
   })
 
   on('turn.step', async function* ($, e, next) {
-    if (e.agentId === undefined) {
-      await update($, snap, s => {
-        const was = { ...EMPTY, ...s }
-        return { ...was, requests: was.requests + 1, effort: e.effort === undefined ? null : String(e.effort) }
-      })
-    }
+    if (e.agentId === undefined) await patch($, { effort: e.effort === undefined ? null : String(e.effort) })
     return yield* next(e)
   })
 

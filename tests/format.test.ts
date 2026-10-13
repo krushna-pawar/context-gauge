@@ -3,7 +3,6 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   bar,
   buildCard,
-  fmtCost,
   fmtModel,
   fmtMode,
   fmtTokens,
@@ -15,12 +14,9 @@ const FULL: CardInput = {
   model: 'Opus 5.5',
   effort: 'high',
   mode: 'default',
-  requests: 12,
-  requestsPartial: false,
   ctxTokens: 84_123,
   ctxWindow: 200_000,
   ctxPercent: 42,
-  costUsd: 1.844,
   limits: [
     { kind: 'five_hour', percentUsed: 31 },
     { kind: 'seven_day', percentUsed: 12.4 },
@@ -31,12 +27,9 @@ const EMPTY: CardInput = {
   model: null,
   effort: null,
   mode: null,
-  requests: 0,
-  requestsPartial: false,
   ctxTokens: null,
   ctxWindow: null,
   ctxPercent: null,
-  costUsd: null,
   limits: [],
 }
 
@@ -55,12 +48,6 @@ describe('formatters', () => {
     expect(fmtTokens(200_000)).toBe('200k')
     expect(fmtTokens(1_000_000)).toBe('1.0M')
     expect(fmtTokens(1_500_000)).toBe('1.5M')
-  })
-
-  test('cost is always an estimate, never a charge', () => {
-    expect(fmtCost(1.844)).toBe('≈$1.84')
-    expect(fmtCost(0)).toBe('≈$0.00')
-    expect(fmtCost(null)).toBe('—')
   })
 
   test('model id to display name, unknown ids unchanged', () => {

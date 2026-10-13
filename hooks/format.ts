@@ -35,8 +35,6 @@ export function fmtTokens(n: number): string {
   return `${(n / 1_000_000).toFixed(1)}M`
 }
 
-export const fmtCost = (usd: number | null) => (usd === null ? DASH : `≈$${usd.toFixed(2)}`)
-
 // `claude-opus-5-5[1m]` → `Opus 5.5`; anything not spelled that way is shown as given.
 export function fmtModel(id: string): string {
   const m = /^claude-([a-z]+)-(\d+)-(\d{1,2})(?!\d)/.exec(id)

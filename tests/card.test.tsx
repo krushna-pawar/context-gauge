@@ -33,7 +33,6 @@ const engine = (on: On, settings: Record<string, unknown> = {}) => {
   on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
   on('classic.PostToolUse', () => ({}))
   on('session.model', () => ({ value: 'Opus 5.5' }))
-  on('session.turns', () => ({ value: 0 }))
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [] } }))
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
