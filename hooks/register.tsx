@@ -163,14 +163,12 @@ export const register: Register = on => {
       )
       const sep = <Text color={COLORS.muted}>│</Text>
       const { left, right } = ends(data)
-      // Context gets 40% of the bar room, as on the terminal.
-      const weights = [4, 3, 3]
       return (
         <Box {...box} flexDirection="row" alignItems="center" columnGap={fit.gap + 1}>
           <Box flexShrink={0}>{span(left)}</Box>
-          {gauges(data, fit).flatMap((g, i) => [
+          {gauges(data, fit).flatMap(g => [
             sep,
-            <Box flexDirection="row" alignItems="center" columnGap={1} flexGrow={fit.bars ? weights[i] : 0} flexShrink={1} minWidth={0}>
+            <Box flexDirection="row" alignItems="center" columnGap={1} flexGrow={fit.bars ? 1 : 0} flexShrink={1} minWidth={0}>
               <Box flexShrink={0}>{span({ text: g.label, tone: 'muted' })}</Box>
               {fit.bars ? (
                 // A thin strip, not a run of ━: the desktop sets glyphs in a proportional font.
@@ -182,7 +180,8 @@ export const register: Register = on => {
                   </Box>
                 </Box>
               ) : null}
-              <Box flexShrink={0} width={4} justifyContent="flex-end">
+              {/* Left-aligned in a fixed slot: the same gap after every bar, whatever the digits. */}
+              <Box flexShrink={0} width={4}>
                 {percent(g.pct, 0).map((p, j) => span(p, String(j)))}
               </Box>
               {g.tail.length ? (
