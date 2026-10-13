@@ -1,0 +1,6 @@
+{
+  "name": "main-card",
+  "version": "0.2.0",
+  "description": "A single-line status rail above the prompt: model, context, 5h/7d usage, effort and mode.",
+  "types": "./types/index.d.ts"
+}

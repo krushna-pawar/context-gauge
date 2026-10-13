@@ -1,0 +1,5 @@
+{
+  "name": "main-card-local",
+  "owner": { "name": "krushna" },
+  "plugins": [{ "name": "main-card", "source": "./" }]
+}
