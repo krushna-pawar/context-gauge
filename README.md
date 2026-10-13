@@ -1,10 +1,16 @@
 # context-gauge
 
-A Claude Code mod that puts a one-line status card above the prompt:
+A Claude Code mod that puts a one-line status card above the prompt.
 
-```
-OPUS 5.5  │  CTX ━━━━━━━━━━  42%   84.1k / 200k  │  5H ━━━━━━━  31%  │  7D ━━━━━━━  12%  │  HIGH / AUTO
-```
+**In the terminal**
+
+![context-gauge in the Claude Code terminal](assets/terminal-interface.png)
+
+**In the Claude desktop app**
+
+![context-gauge in the Claude desktop app's Code tab](assets/app-interface.png)
+
+The card shows:
 
 - **Model** in use
 - **CTX**: how full the context window is, with tokens used / window size
@@ -12,7 +18,7 @@ OPUS 5.5  │  CTX ━━━━━━━━━━  42%   84.1k / 200k  │  5H �
 - **Effort / mode**: the current effort level and permission mode
 
 Percentages turn red at 90%. The card fits itself to the terminal width, dropping the token
-count and then the bars as space runs out. It also draws in the Claude desktop app's Code tab.
+count and then the bars as space runs out. In the desktop app it lays out to fit the window's font.
 
 ## Install
 
