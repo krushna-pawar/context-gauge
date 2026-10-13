@@ -19,7 +19,7 @@ count and then the bars as space runs out. It also draws in the Claude desktop a
 In a Claude Code terminal session, run:
 
 ```
-/plugin install main-card --marketplace <your-github-username>/claude-main-card
+/plugin install main-card --marketplace krushna-pawar/claude-main-card
 ```
 
 Answer `y` to add the marketplace, then press Enter to install for your user. The card shows up
