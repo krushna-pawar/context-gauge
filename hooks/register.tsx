@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage } from 'claude-code'
 
 import type { Snap } from '../types'
-import { buildCard, ends, gauges, percent, type Seg, type Tone } from './format'
+import { buildCard, ends, fillPct, gauges, pctSeg, seg, type Row, type Seg, type Tone } from './format'
 
 const COLORS: Record<Tone, string> = {
   text: '#F0EBE3',
@@ -151,16 +151,17 @@ export const register: Register = on => {
     const data = { ...EMPTY, ...s }
     const card = buildCard(data, e.props.bodyColumns)
     const box = { borderStyle: 'round', borderColor: BORDER, paddingX: card.paddingX, width: card.width } as const
+    const span = (part: Seg, key?: string) => (
+      <Text key={key} color={COLORS[part.tone]} bold={part.bold}>
+        {part.text}
+      </Text>
+    )
+    const spans = (row: Row) => row.map((p, j) => span(p, String(j)))
 
     // The desktop sets text in a proportional font, so cell-counted padding comes up short:
     // lay the same rail out with flex instead, the bars taking whatever room is left.
     if (e.surface !== 'terminal') {
       const { fit } = card
-      const span = (part: Seg, key?: string) => (
-        <Text key={key} color={COLORS[part.tone]} bold={part.bold} wrap="truncate-end">
-          {part.text}
-        </Text>
-      )
       const sep = <Text color={COLORS.muted}>│</Text>
       const { left, right } = ends(data)
       return (
@@ -169,31 +170,31 @@ export const register: Register = on => {
           {gauges(data, fit).flatMap(g => [
             sep,
             <Box flexDirection="row" alignItems="center" columnGap={1} flexGrow={fit.bars ? 1 : 0} flexShrink={1} minWidth={0}>
-              <Box flexShrink={0}>{span({ text: g.label, tone: 'muted' })}</Box>
+              <Box flexShrink={0}>{span(seg(g.label, 'muted'))}</Box>
               {fit.bars ? (
                 // A thin strip, not a run of ━: the desktop sets glyphs in a proportional font.
                 <Box flexGrow={1} width={0} minWidth={3} height={1} alignItems="center">
                   <Box flexGrow={1} height={BAR_HEIGHT} backgroundColor={COLORS.track} flexDirection="row" overflow="hidden">
-                    {g.pct !== null && g.pct > 0 ? (
-                      <Box width={`${Math.min(100, Math.max(2, g.pct))}%`} height="100%" backgroundColor={COLORS.accent} />
+                    {fillPct(g.pct) > 0 ? (
+                      <Box width={`${fillPct(g.pct)}%`} height="100%" backgroundColor={COLORS.accent} />
                     ) : null}
                   </Box>
                 </Box>
               ) : null}
               {/* Left-aligned in a fixed slot: the same gap after every bar, whatever the digits. */}
               <Box flexShrink={0} width={4}>
-                {percent(g.pct, 0).map((p, j) => span(p, String(j)))}
+                {span(pctSeg(g.pct))}
               </Box>
               {g.tail.length ? (
                 <Box flexShrink={0} flexDirection="row">
-                  {g.tail.filter(p => p.text.trim() !== '').map((p, j) => span(p, String(j)))}
+                  {spans(g.tail)}
                 </Box>
               ) : null}
             </Box>,
           ])}
           {sep}
           <Box flexShrink={0} flexDirection="row">
-            {right.map((p, j) => span(p, String(j)))}
+            {spans(right)}
           </Box>
         </Box>
       )
@@ -203,13 +204,7 @@ export const register: Register = on => {
       <Box flexDirection="column" {...box}>
         {card.rows.map(row => (
           <Text wrap="truncate-end">
-            {row.length === 0
-              ? ' '
-              : row.map(part => (
-                  <Text color={COLORS[part.tone]} bold={part.bold}>
-                    {part.text}
-                  </Text>
-                ))}
+            {row.length === 0 ? ' ' : spans(row)}
           </Text>
         ))}
       </Box>

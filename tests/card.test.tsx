@@ -14,8 +14,8 @@ const props = (bodyColumns: number, extra: { isWorking?: boolean; hasSurvey?: bo
 const flat = (node: RenderNode): string =>
   typeof node === 'string' ? node : ((node as { children?: RenderNode[] }).children ?? []).map(flat).join('')
 
-const draw = async ($: Engine, columns: number, extra = {}) => {
-  const ui = await $.ui.mount({ plugin: 'main-card', surface: 'terminal', component: 'AbovePrompt', props: props(columns, extra) })
+const draw = async ($: Engine, columns: number, extra = {}, surface: 'terminal' | 'desktop' = 'terminal') => {
+  const ui = await $.ui.mount({ plugin: 'main-card', surface, component: 'AbovePrompt', props: props(columns, extra) })
   const tree = await ui.drawn()
   await ui.unmount()
   const box = tree as { type: string; props?: Record<string, unknown>; children?: RenderNode[] }
@@ -178,9 +178,7 @@ describe('band', () => {
       ],
       changed: ['context', 'rateLimits'],
     } as never)
-    const ui = await $.ui.mount({ plugin: 'main-card', surface: 'desktop', component: 'AbovePrompt', props: props(150) })
-    const tree = (await ui.drawn()) as { type: string; props?: Record<string, unknown>; children?: RenderNode[] }
-    await ui.unmount()
+    const { box: tree } = await draw($, 150, {}, 'desktop')
     expect(tree.props?.flexDirection).toBe('row')
     expect(tree.props?.width).toBe(150)
     expect(tree.props?.borderStyle).toBe('round')
@@ -201,10 +199,8 @@ describe('band', () => {
   test('desktop: narrow widths still draw one row', async ($, on) => {
     engine(on)
     for (const columns of [200, 64, 32]) {
-      const ui = await $.ui.mount({ plugin: 'main-card', surface: 'desktop', component: 'AbovePrompt', props: props(columns) })
-      const tree = (await ui.drawn()) as { props?: Record<string, unknown> }
-      await ui.unmount()
-      expect(tree.props?.flexDirection).toBe('row')
+      const { box } = await draw($, columns, {}, 'desktop')
+      expect(box.props?.flexDirection).toBe('row')
     }
   })
 

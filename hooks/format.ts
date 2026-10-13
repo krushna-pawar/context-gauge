@@ -7,6 +7,8 @@ export type CardInput = Snap
 export type Card = { width: number; inner: number; paddingX: number; rows: Row[]; fit: Fit }
 
 const MIN_BAR = 3
+// The least share of a bar any use fills, so 4% never reads as empty.
+const MIN_FILL = 2
 const CRITICAL = 90
 const DASH = '—'
 
@@ -21,7 +23,7 @@ const MODES: Record<string, string> = {
   dontAsk: "don't ask",
 }
 
-const seg = (text: string, tone: Tone = 'text'): Seg => ({ text, tone })
+export const seg = (text: string, tone: Tone = 'text'): Seg => ({ text, tone })
 const spaces = (n: number): Seg => seg(' '.repeat(Math.max(0, n)), 'muted')
 export const rowText = (row: Row) => row.map(s => s.text).join('')
 const rowLength = (row: Row) => rowText(row).length
@@ -45,23 +47,29 @@ export function fmtModel(id: string): string {
 
 export const fmtMode = (mode: string | null) => (mode === null ? DASH : (MODES[mode] ?? mode))
 
+// How much of a bar to fill, in percent: none for no use, at least MIN_FILL for any.
+export const fillPct = (pct: number | null) => (pct === null || pct <= 0 ? 0 : Math.min(100, Math.max(MIN_FILL, pct)))
+
 // Filled cells in Claude orange, the rest a dark track, whatever the percentage.
 export function bar(pct: number | null, width: number): Seg[] {
   if (width <= 0) return []
   if (pct === null) return [seg('━'.repeat(width), 'track')]
-  // Any use at all shows at least one cell, so 4% never reads as empty.
-  const filled = Math.min(width, Math.max(pct > 0 ? 1 : 0, Math.round((pct / 100) * width)))
+  // At least one cell for any use, the same rule fillPct gives the desktop's strip.
+  const filled = fillPct(pct) === 0 ? 0 : Math.min(width, Math.max(1, Math.round((pct / 100) * width)))
   const out: Seg[] = []
   if (filled > 0) out.push(seg('━'.repeat(filled), 'accent'))
   if (filled < width) out.push(seg('━'.repeat(width - filled), 'track'))
   return out
 }
 
-// A percentage as its own segment (so tone applies to the digits alone) after its padding.
-export function percent(pct: number | null, field = 4): Seg[] {
-  if (pct === null) return [spaces(field - 1), seg(DASH, 'muted')]
-  const text = `${Math.floor(pct)}%`
-  return [spaces(field - text.length), seg(text, pct >= CRITICAL ? 'critical' : 'text')]
+// A percentage as its own segment, so tone applies to the digits alone.
+export const pctSeg = (pct: number | null): Seg =>
+  pct === null ? seg(DASH, 'muted') : seg(`${Math.floor(pct)}%`, pct >= CRITICAL ? 'critical' : 'text')
+
+// The same, right-aligned in a field of cells.
+function percent(pct: number | null, field = 4): Seg[] {
+  const p = pctSeg(pct)
+  return [spaces(field - p.text.length), p]
 }
 
 const value = (v: string | null): Seg => (v === null ? seg(DASH, 'muted') : seg(v))
@@ -89,14 +97,12 @@ const FITS: Fit[] = [
   { gap: 0, tokens: false, bars: false },
 ]
 
-export type Gauge = { label: string; pct: number | null; tail: Row }
+type Gauge = { label: string; pct: number | null; tail: Row }
 
 export function gauges(s: CardInput, fit: Fit): Gauge[] {
   const used = value(s.ctxTokens === null ? null : fmtTokens(s.ctxTokens))
   const tokens: Row = fit.tokens
     ? [
-        // Keep the bar's length steady as the used figure grows from "9.5k" to "84.1k".
-        spaces(2 + 6 - used.text.length),
         { ...used, tone: 'muted' },
         seg(' / ', 'muted'),
         { ...value(s.ctxWindow === null ? null : fmtTokens(s.ctxWindow)), tone: 'muted' },
@@ -112,10 +118,13 @@ export function gauges(s: CardInput, fit: Fit): Gauge[] {
   ]
 }
 
-const gauge = (g: Gauge, width: number | null): Row =>
-  width === null
-    ? [seg(g.label, 'muted'), ...percent(g.pct), ...g.tail]
-    : [seg(g.label, 'muted'), spaces(1), ...bar(g.pct, width), spaces(1), ...percent(g.pct), ...g.tail]
+// The tail's lead keeps the bar's length steady as the used figure grows from "9.5k" to "84.1k".
+const gauge = (g: Gauge, width: number | null): Row => [
+  seg(g.label, 'muted'),
+  ...(width === null ? [] : [spaces(1), ...bar(g.pct, width), spaces(1)]),
+  ...percent(g.pct),
+  ...(g.tail.length ? [spaces(2 + 6 - g.tail[0]!.text.length), ...g.tail] : []),
+]
 
 // Context takes 40% of the free cells; the 5h and 7d bars share the rest.
 function split(free: number): number[] {
@@ -161,7 +170,10 @@ export function buildCard(s: CardInput, columns: number): Card {
   const width = Math.max(columns, 4)
   const paddingX = columns >= 60 ? 2 : 1
   const inner = width - 2 - paddingX * 2
-  const fit = FITS.find(f => rail(s, inner, f) !== null) ?? FITS[FITS.length - 1]!
-  const row = rail(s, inner, fit) ?? rail(s, inner, fit, true)!
-  return { width, inner, paddingX, rows: [clip(row, inner)], fit }
+  for (const fit of FITS) {
+    const row = rail(s, inner, fit)
+    if (row) return { width, inner, paddingX, rows: [clip(row, inner)], fit }
+  }
+  const fit = FITS[FITS.length - 1]!
+  return { width, inner, paddingX, rows: [clip(rail(s, inner, fit, true)!, inner)], fit }
 }
