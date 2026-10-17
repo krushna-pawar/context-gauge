@@ -250,7 +250,7 @@ describe('band', () => {
     expect((await draw($, 160)).rows[0]!).not.toContain('↻20m')
   })
 
-  test('desktop drops tokens and the reset time before its bars get short', async ($, on) => {
+  test('desktop drops tokens, then the reset time, before its bars get short', async ($, on) => {
     engine(on)
     const at = (minutes: number) => new Date(NOW + minutes * 60_000).toISOString()
     await $.session.measure({
@@ -277,14 +277,20 @@ describe('band', () => {
     for (const part of ['84.1k', '↻1h20m']) expect(flat(wide as RenderNode)).toContain(part)
     expect(strips(wide as RenderNode)).toBe(3)
 
-    // Where the terminal would still squeeze tokens in beside short bars, the desktop gives them up.
+    // Where the terminal would still squeeze tokens in beside short bars, the desktop gives them up
+    // but keeps the 5H countdown, which the terminal drops along with the tokens.
     expect((await draw($, 90)).rows[0]!).toContain('84.1k')
     const { box } = await draw($, 90, {}, 'desktop')
     const text = flat(box as RenderNode)
-    for (const part of ['84.1k', '↻']) expect(text).not.toContain(part)
-    for (const part of ['8%', '34%', '7%']) expect(text).toContain(part)
+    expect(text).not.toContain('84.1k')
+    for (const part of ['8%', '34%', '↻1h20m', '7%']) expect(text).toContain(part)
     expect(strips(box as RenderNode)).toBe(3)
     expect(box.props?.marginTop).toBe(1)
+    expect((await draw($, 80)).rows[0]!).not.toContain('↻')
+
+    const narrow = (await draw($, 74, {}, 'desktop')).box
+    expect(flat(narrow as RenderNode)).not.toContain('↻')
+    expect(strips(narrow as RenderNode)).toBe(3)
   })
 
   test('yields the band to a survey', async ($, on) => {

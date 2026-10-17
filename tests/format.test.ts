@@ -157,10 +157,10 @@ describe('rail', () => {
     expect(lines({ ...FULL, mode: 'auto' }, 160).text[0]!.endsWith('HIGH / AUTO')).toBe(true)
   })
 
-  test('90% and over marks the digits critical, 70% and over a warning', () => {
+  test('90% and over marks the digits critical; below that they stay plain', () => {
     const row = buildCard({ ...FULL, ctxPercent: 69, limits: [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 70 }] }, 160).rows[0]!
     expect(row.find(s => s.text === '93%')?.tone).toBe('critical')
-    expect(row.find(s => s.text === '70%')?.tone).toBe('warning')
+    expect(row.find(s => s.text === '70%')?.tone).toBe('text')
     expect(row.find(s => s.text === '69%')?.tone).toBe('text')
   })
 
@@ -196,8 +196,8 @@ describe('rail', () => {
 
   test('a larger minimum bar drops tokens before the bars get that short', () => {
     expect(buildCard(FULL, 100).fit.tokens).toBe(true)
-    const card = buildCard(FULL, 100, undefined, 8)
-    expect(card.fit).toEqual({ gap: 1, tokens: false, bars: true })
+    const card = buildCard(FULL, 100, undefined, { minBar: 8 })
+    expect(card.fit).toEqual({ gap: 1, tokens: false, resets: false, bars: true })
     expect(rowText(card.rows[0]!)).not.toContain('84.1k')
   })
 })

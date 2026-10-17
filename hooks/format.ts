@@ -1,6 +1,6 @@
 import type { Snap } from '../types'
 
-export type Tone = 'text' | 'muted' | 'accent' | 'warning' | 'critical' | 'track'
+export type Tone = 'text' | 'muted' | 'accent' | 'critical' | 'track'
 export type Seg = { text: string; tone: Tone; bold?: boolean }
 export type Row = Seg[]
 export type CardInput = Snap
@@ -9,7 +9,6 @@ export type Card = { width: number; inner: number; paddingX: number; rows: Row[]
 const MIN_BAR = 3
 // The least share of a bar any use fills, so 4% never reads as empty.
 const MIN_FILL = 2
-const WARNING = 70
 const CRITICAL = 90
 const DASH = '—'
 
@@ -67,7 +66,7 @@ export function bar(pct: number | null, width: number): Seg[] {
 export const pctSeg = (pct: number | null): Seg =>
   pct === null
     ? seg(DASH, 'muted')
-    : seg(`${Math.floor(pct)}%`, pct >= CRITICAL ? 'critical' : pct >= WARNING ? 'warning' : 'text')
+    : seg(`${Math.floor(pct)}%`, pct >= CRITICAL ? 'critical' : 'text')
 
 // The same, right-aligned in a field of cells.
 function percent(pct: number | null, field = 4): Seg[] {
@@ -91,13 +90,22 @@ function clip(row: Row, inner: number): Row {
 }
 
 // How much of the rail survives as the band narrows, roomiest first.
-export type Fit = { gap: number; tokens: boolean; bars: boolean }
+// `resets`: the 5H gauge's reset countdown.
+export type Fit = { gap: number; tokens: boolean; resets: boolean; bars: boolean }
 const FITS: Fit[] = [
-  { gap: 2, tokens: true, bars: true },
-  { gap: 1, tokens: true, bars: true },
-  { gap: 1, tokens: false, bars: true },
-  { gap: 1, tokens: false, bars: false },
-  { gap: 0, tokens: false, bars: false },
+  { gap: 2, tokens: true, resets: true, bars: true },
+  { gap: 1, tokens: true, resets: true, bars: true },
+  { gap: 1, tokens: false, resets: false, bars: true },
+  { gap: 1, tokens: false, resets: false, bars: false },
+  { gap: 0, tokens: false, resets: false, bars: false },
+]
+
+// The desktop keeps the 5H countdown a step longer than the token count.
+export const DESKTOP_FITS: Fit[] = [
+  FITS[0]!,
+  FITS[1]!,
+  { gap: 1, tokens: false, resets: true, bars: true },
+  ...FITS.slice(2),
 ]
 
 // `steady`: cells the tail's first segment is padded to, so the bar keeps its length as it grows.
@@ -130,7 +138,7 @@ export function gauges(s: CardInput, fit: Fit, now?: number): Gauge[] {
     ...WINDOWS.map(([kind, label]) => {
       const limit = s.limits.find(l => l.kind === kind)
       // Only the 5-hour window shows its reset: the 7-day one is days off and rarely the question.
-      const resets = kind === 'five_hour' && fit.tokens && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
+      const resets = kind === 'five_hour' && fit.resets && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
       return { label, pct: limit?.percentUsed ?? null, tail: resets === null ? [] : [seg(`↻${resets}`, 'muted')] }
     }),
   ]
@@ -183,15 +191,20 @@ function rail(s: CardInput, inner: number, fit: Fit, minBar: number, now?: numbe
 }
 
 // One full-width line: model │ CTX bar │ 5H bar │ 7D bar │ EFFORT / MODE.
-// `minBar`: the fewest cells a bar may have before the next fit is tried.
-export function buildCard(s: CardInput, columns: number, now?: number, minBar = MIN_BAR): Card {
+// `minBar`: the fewest cells a bar may have before the next fit is tried; `fits`: the fits to try.
+export function buildCard(
+  s: CardInput,
+  columns: number,
+  now?: number,
+  { minBar = MIN_BAR, fits = FITS }: { minBar?: number; fits?: Fit[] } = {},
+): Card {
   const width = Math.max(columns, 4)
   const paddingX = columns >= 60 ? 2 : 1
   const inner = width - 2 - paddingX * 2
-  for (const fit of FITS) {
+  for (const fit of fits) {
     const row = rail(s, inner, fit, minBar, now)
     if (row) return { width, inner, paddingX, rows: [clip(row, inner)], fit }
   }
-  const fit = FITS[FITS.length - 1]!
+  const fit = fits[fits.length - 1]!
   return { width, inner, paddingX, rows: [clip(rail(s, inner, fit, minBar, now, true)!, inner)], fit }
 }

@@ -2,14 +2,13 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage, Timer } from 'claude-code'
 
 import type { Snap } from '../types'
-import { buildCard, ends, fillPct, gauges, pctSeg, seg, type Row, type Seg, type Tone } from './format'
+import { buildCard, DESKTOP_FITS, ends, fillPct, gauges, pctSeg, seg, type Row, type Seg, type Tone } from './format'
 
 // Theme keys, not fixed colors, so the card reads on light themes as well as dark ones.
 const COLORS: Record<Tone, string> = {
   text: 'text',
   muted: 'inactive',
   accent: 'claude',
-  warning: 'warning',
   critical: 'error',
   track: 'subtle',
 }
@@ -18,8 +17,8 @@ const BORDER = 'claude'
 const BAR_HEIGHT = 0.25
 // The desktop's proportional text is narrower than the code font's cells, but its gaps are
 // wider, so what fits is judged on bodyColumns as is. Its bars keep at least this many cells:
-// below that, token counts and the reset countdown go first.
-const DESKTOP_MIN_BAR = 8
+// below that, token counts go first, then the reset countdown.
+const DESKTOP_MIN_BAR = 6
 
 const EMPTY: Snap = {
   model: null,
@@ -148,7 +147,7 @@ export const register: Register = on => {
     // The desktop sets text in a proportional font, so cell-counted padding comes up short:
     // lay the same rail out with flex instead, the bars taking whatever room is left.
     if (e.surface !== 'terminal') {
-      const { fit } = buildCard(data, e.props.bodyColumns, now, DESKTOP_MIN_BAR)
+      const { fit } = buildCard(data, e.props.bodyColumns, now, { minBar: DESKTOP_MIN_BAR, fits: DESKTOP_FITS })
       const sep = <Text color={COLORS.muted}>│</Text>
       const { left, right } = ends(data)
       return (

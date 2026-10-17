@@ -18,7 +18,7 @@ The card shows:
   and how long until the 5-hour window resets (`↻1h20m`)
 - **Effort / mode**: the current effort level and permission mode
 
-Percentages turn amber at 70% and red at 90%. Colors follow your Claude Code theme, so the card
+Percentages turn red at 90%. Colors follow your Claude Code theme, so the card
 reads on light themes as well as dark ones.
 
 ## Narrow windows
