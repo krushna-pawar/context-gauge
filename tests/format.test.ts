@@ -177,4 +177,27 @@ describe('rail', () => {
     expect(lines(s, 160).text[0]!).not.toContain('↻')
     expect(rowText(buildCard(s, 160, now).rows[0]!)).toContain('31%  ↻1h20m')
   })
+
+  test('only 5H shows a reset countdown, never 7D', () => {
+    const now = Date.parse('2026-10-17T12:00:00Z')
+    const at = (ms: number) => new Date(now + ms).toISOString()
+    const s = {
+      ...FULL,
+      limits: [
+        { kind: 'five_hour', percentUsed: 31, resetsAt: at(80 * 60_000) },
+        { kind: 'seven_day', percentUsed: 12, resetsAt: at((3 * 24 + 4) * 3_600_000) },
+      ],
+    }
+    const t = rowText(buildCard(s, 160, now).rows[0]!)
+    expect(t).toContain('31%  ↻1h20m')
+    expect(t).toMatch(/7D ━+  12%  │/)
+    expect(t).not.toContain('↻3d4h')
+  })
+
+  test('a larger minimum bar drops tokens before the bars get that short', () => {
+    expect(buildCard(FULL, 100).fit.tokens).toBe(true)
+    const card = buildCard(FULL, 100, undefined, 8)
+    expect(card.fit).toEqual({ gap: 1, tokens: false, bars: true })
+    expect(rowText(card.rows[0]!)).not.toContain('84.1k')
+  })
 })

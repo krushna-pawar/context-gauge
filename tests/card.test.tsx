@@ -225,7 +225,7 @@ describe('band', () => {
     expect(row).toMatch(/7D ━+  12%/)
   })
 
-  test('5H and 7D say when they reset, and the countdown moves with the clock', async ($, on) => {
+  test('5H says when it resets, 7D does not, and the countdown moves with the clock', async ($, on) => {
     const clock = engine(on)
     const at = (minutes: number) => new Date(NOW + minutes * 60_000).toISOString()
     await $.session.measure({
@@ -238,8 +238,11 @@ describe('band', () => {
     } as never)
     let row = (await draw($, 160)).rows[0]!
     expect(row).toMatch(/5H ━+  62%  ↻1h20m/)
-    expect(row).toMatch(/7D ━+  12%  ↻3d4h/)
-    expect(flat((await draw($, 160, {}, 'desktop')).box as RenderNode)).toContain('↻1h20m')
+    expect(row).toMatch(/7D ━+  12%  │/)
+    expect(row).not.toContain('↻3d4h')
+    const desktop = flat((await draw($, 160, {}, 'desktop')).box as RenderNode)
+    expect(desktop).toContain('↻1h20m')
+    expect(desktop).not.toContain('↻3d4h')
     await clock.advance(60 * 60_000)
     row = (await draw($, 160)).rows[0]!
     expect(row).toMatch(/5H ━+  62%  ↻20m/)
@@ -247,7 +250,7 @@ describe('band', () => {
     expect((await draw($, 160)).rows[0]!).not.toContain('↻20m')
   })
 
-  test('desktop keeps tokens and reset times where the terminal would drop them', async ($, on) => {
+  test('desktop drops tokens and the reset time before its bars get short', async ($, on) => {
     engine(on)
     const at = (minutes: number) => new Date(NOW + minutes * 60_000).toISOString()
     await $.session.measure({
@@ -258,10 +261,29 @@ describe('band', () => {
       ],
       changed: ['context', 'rateLimits'],
     } as never)
-    expect((await draw($, 88)).rows[0]!).not.toContain('84.1k')
-    const { box } = await draw($, 88, {}, 'desktop')
+    const strips = (box: RenderNode) => {
+      let n = 0
+      const walk = (node: RenderNode) => {
+        if (typeof node === 'string' || !node) return
+        const el = node as { props?: Record<string, unknown>; children?: RenderNode[] }
+        if (el.props?.minWidth === 3) n++
+        ;(el.children ?? []).forEach(walk)
+      }
+      walk(box)
+      return n
+    }
+
+    const wide = (await draw($, 130, {}, 'desktop')).box
+    for (const part of ['84.1k', '↻1h20m']) expect(flat(wide as RenderNode)).toContain(part)
+    expect(strips(wide as RenderNode)).toBe(3)
+
+    // Where the terminal would still squeeze tokens in beside short bars, the desktop gives them up.
+    expect((await draw($, 90)).rows[0]!).toContain('84.1k')
+    const { box } = await draw($, 90, {}, 'desktop')
     const text = flat(box as RenderNode)
-    for (const part of ['84.1k', '↻1h20m', '↻3d4h']) expect(text).toContain(part)
+    for (const part of ['84.1k', '↻']) expect(text).not.toContain(part)
+    for (const part of ['8%', '34%', '7%']) expect(text).toContain(part)
+    expect(strips(box as RenderNode)).toBe(3)
     expect(box.props?.marginTop).toBe(1)
   })
 

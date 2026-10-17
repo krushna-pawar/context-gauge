@@ -114,7 +114,7 @@ export function fmtIn(iso: string, now: number): string | null {
   return `${Math.floor(hours / 24)}d${hours % 24}h`
 }
 
-// `now` (ms) lets the 5h/7d gauges say when they reset; without it they don't.
+// `now` (ms) lets the 5h gauge say when it resets; without it it doesn't.
 export function gauges(s: CardInput, fit: Fit, now?: number): Gauge[] {
   const used = value(s.ctxTokens === null ? null : fmtTokens(s.ctxTokens))
   const tokens: Row = fit.tokens
@@ -129,7 +129,8 @@ export function gauges(s: CardInput, fit: Fit, now?: number): Gauge[] {
     { label: 'CTX', pct: s.ctxPercent, tail: tokens, steady: 6 },
     ...WINDOWS.map(([kind, label]) => {
       const limit = s.limits.find(l => l.kind === kind)
-      const resets = fit.tokens && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
+      // Only the 5-hour window shows its reset: the 7-day one is days off and rarely the question.
+      const resets = kind === 'five_hour' && fit.tokens && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
       return { label, pct: limit?.percentUsed ?? null, tail: resets === null ? [] : [seg(`↻${resets}`, 'muted')] }
     }),
   ]
@@ -158,7 +159,7 @@ export const ends = (s: CardInput): { left: Seg; right: Row } => ({
   right: [upper(s.effort), seg(' / ', 'muted'), upper(s.mode === null ? null : fmtMode(s.mode))],
 })
 
-function rail(s: CardInput, inner: number, fit: Fit, now?: number, force = false): Row | null {
+function rail(s: CardInput, inner: number, fit: Fit, minBar: number, now?: number, force = false): Row | null {
   const sep = seg(`${' '.repeat(fit.gap)}│${' '.repeat(fit.gap)}`, 'muted')
   const { left, right } = ends(s)
   const gs = gauges(s, fit, now)
@@ -172,7 +173,7 @@ function rail(s: CardInput, inner: number, fit: Fit, now?: number, force = false
   if (fit.bars) {
     const free = inner - rowLength(build([0, 0, 0]))
     const widths = split(free)
-    if (widths.some(w => w < MIN_BAR)) return null
+    if (widths.some(w => w < minBar)) return null
     return build(widths)
   }
   const pad = inner - rowLength(build([null, null, null]))
@@ -182,14 +183,15 @@ function rail(s: CardInput, inner: number, fit: Fit, now?: number, force = false
 }
 
 // One full-width line: model │ CTX bar │ 5H bar │ 7D bar │ EFFORT / MODE.
-export function buildCard(s: CardInput, columns: number, now?: number): Card {
+// `minBar`: the fewest cells a bar may have before the next fit is tried.
+export function buildCard(s: CardInput, columns: number, now?: number, minBar = MIN_BAR): Card {
   const width = Math.max(columns, 4)
   const paddingX = columns >= 60 ? 2 : 1
   const inner = width - 2 - paddingX * 2
   for (const fit of FITS) {
-    const row = rail(s, inner, fit, now)
+    const row = rail(s, inner, fit, minBar, now)
     if (row) return { width, inner, paddingX, rows: [clip(row, inner)], fit }
   }
   const fit = FITS[FITS.length - 1]!
-  return { width, inner, paddingX, rows: [clip(rail(s, inner, fit, now, true)!, inner)], fit }
+  return { width, inner, paddingX, rows: [clip(rail(s, inner, fit, minBar, now, true)!, inner)], fit }
 }

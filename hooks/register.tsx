@@ -16,9 +16,10 @@ const COLORS: Record<Tone, string> = {
 const BORDER = 'claude'
 // The desktop's bar thickness, in rows.
 const BAR_HEIGHT = 0.25
-// The desktop sets text in a proportional font, which takes roughly this share of the code
-// font's cells that bodyColumns counts; what fits is judged on that wider count.
-const DESKTOP_TEXT_SHARE = 0.8
+// The desktop's proportional text is narrower than the code font's cells, but its gaps are
+// wider, so what fits is judged on bodyColumns as is. Its bars keep at least this many cells:
+// below that, token counts and the reset countdown go first.
+const DESKTOP_MIN_BAR = 8
 
 const EMPTY: Snap = {
   model: null,
@@ -147,7 +148,7 @@ export const register: Register = on => {
     // The desktop sets text in a proportional font, so cell-counted padding comes up short:
     // lay the same rail out with flex instead, the bars taking whatever room is left.
     if (e.surface !== 'terminal') {
-      const { fit } = buildCard(data, Math.floor(e.props.bodyColumns / DESKTOP_TEXT_SHARE), now)
+      const { fit } = buildCard(data, e.props.bodyColumns, now, DESKTOP_MIN_BAR)
       const sep = <Text color={COLORS.muted}>│</Text>
       const { left, right } = ends(data)
       return (
