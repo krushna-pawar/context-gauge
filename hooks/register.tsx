@@ -152,7 +152,8 @@ export const register: Register = on => {
       const { left, right } = ends(data)
       return (
         // marginTop: a little air between the card and any row another plugin draws above it.
-        <Box {...box} marginTop={1} flexDirection="row" alignItems="center" columnGap={fit.gap + 1}>
+        // columnGap: the terminal's spaces around each │, but never none.
+        <Box {...box} marginTop={1} flexDirection="row" alignItems="center" columnGap={Math.max(1, fit.gap)}>
           <Box flexShrink={0}>{span(left)}</Box>
           {gauges(data, fit, now).flatMap(g => [
             sep,

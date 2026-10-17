@@ -198,6 +198,8 @@ describe('band', () => {
     }
     walk(tree as RenderNode)
     expect(fills).toEqual(['6%', '4%', '40%'])
+    // The separators keep the terminal's spacing, not more.
+    expect(tree.props?.columnGap).toBe(2)
   })
 
   test('desktop: narrow widths still draw one row', async ($, on) => {
