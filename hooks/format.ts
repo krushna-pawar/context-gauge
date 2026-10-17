@@ -111,15 +111,12 @@ export const DESKTOP_FITS: Fit[] = [
 // `steady`: cells the tail's first segment is padded to, so the bar keeps its length as it grows.
 type Gauge = { label: string; pct: number | null; tail: Row; steady?: number }
 
-// Time until an ISO timestamp, rounded up to the minute: `42m`, `1h20m`, `3d4h`; null once past.
+// Time until an ISO timestamp as hours:minutes, rounded up to the minute: `0:42`, `2:41`; null once past.
 export function fmtIn(iso: string, now: number): string | null {
   const ms = Date.parse(iso) - now
   if (!(ms > 0)) return null
   const minutes = Math.ceil(ms / 60_000)
-  if (minutes < 60) return `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h${minutes % 60}m`
-  return `${Math.floor(hours / 24)}d${hours % 24}h`
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`
 }
 
 // `now` (ms) lets the 5h gauge say when it resets; without it it doesn't.
@@ -139,7 +136,7 @@ export function gauges(s: CardInput, fit: Fit, now?: number): Gauge[] {
       const limit = s.limits.find(l => l.kind === kind)
       // Only the 5-hour window shows its reset: the 7-day one is days off and rarely the question.
       const resets = kind === 'five_hour' && fit.resets && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
-      return { label, pct: limit?.percentUsed ?? null, tail: resets === null ? [] : [seg(`↻${resets}`, 'muted')] }
+      return { label, pct: limit?.percentUsed ?? null, tail: resets === null ? [] : [seg(`↻ ${resets}`, 'muted')] }
     }),
   ]
 }

@@ -167,15 +167,15 @@ describe('rail', () => {
   test('reset countdown: rounded up to the minute, gone once past or without a clock', () => {
     const now = Date.parse('2026-10-17T12:00:00Z')
     const at = (ms: number) => new Date(now + ms).toISOString()
-    expect(fmtIn(at(30_000), now)).toBe('1m')
-    expect(fmtIn(at(42 * 60_000), now)).toBe('42m')
-    expect(fmtIn(at(80 * 60_000), now)).toBe('1h20m')
-    expect(fmtIn(at((3 * 24 + 4) * 3_600_000), now)).toBe('3d4h')
+    expect(fmtIn(at(30_000), now)).toBe('0:01')
+    expect(fmtIn(at(42 * 60_000), now)).toBe('0:42')
+    expect(fmtIn(at(80 * 60_000), now)).toBe('1:20')
+    expect(fmtIn(at((3 * 24 + 4) * 3_600_000), now)).toBe('76:00')
     expect(fmtIn(at(0), now)).toBe(null)
     expect(fmtIn('not a date', now)).toBe(null)
     const s = { ...FULL, limits: [{ kind: 'five_hour', percentUsed: 31, resetsAt: at(80 * 60_000) }] }
     expect(lines(s, 160).text[0]!).not.toContain('↻')
-    expect(rowText(buildCard(s, 160, now).rows[0]!)).toContain('31%  ↻1h20m')
+    expect(rowText(buildCard(s, 160, now).rows[0]!)).toContain('31%  ↻ 1:20')
   })
 
   test('only 5H shows a reset countdown, never 7D', () => {
@@ -189,9 +189,9 @@ describe('rail', () => {
       ],
     }
     const t = rowText(buildCard(s, 160, now).rows[0]!)
-    expect(t).toContain('31%  ↻1h20m')
+    expect(t).toContain('31%  ↻ 1:20')
     expect(t).toMatch(/7D ━+  12%  │/)
-    expect(t).not.toContain('↻3d4h')
+    expect(t).not.toContain('76:00')
   })
 
   test('a larger minimum bar drops tokens before the bars get that short', () => {

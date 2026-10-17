@@ -1,6 +1,6 @@
 {
   "name": "context-gauge",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "A one-line card above the Claude Code prompt: model, context window, 5h/7d usage, effort and mode.",
   "types": "./types/index.d.ts",
   "author": {

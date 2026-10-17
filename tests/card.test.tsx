@@ -237,17 +237,17 @@ describe('band', () => {
       changed: ['context', 'rateLimits'],
     } as never)
     let row = (await draw($, 160)).rows[0]!
-    expect(row).toMatch(/5H ━+  62%  ↻1h20m/)
+    expect(row).toMatch(/5H ━+  62%  ↻ 1:20/)
     expect(row).toMatch(/7D ━+  12%  │/)
-    expect(row).not.toContain('↻3d4h')
+    expect(row).not.toContain('76:00')
     const desktop = flat((await draw($, 160, {}, 'desktop')).box as RenderNode)
-    expect(desktop).toContain('↻1h20m')
-    expect(desktop).not.toContain('↻3d4h')
+    expect(desktop).toContain('↻ 1:20')
+    expect(desktop).not.toContain('76:00')
     await clock.advance(60 * 60_000)
     row = (await draw($, 160)).rows[0]!
-    expect(row).toMatch(/5H ━+  62%  ↻20m/)
+    expect(row).toMatch(/5H ━+  62%  ↻ 0:20/)
     await clock.advance(30 * 60_000)
-    expect((await draw($, 160)).rows[0]!).not.toContain('↻20m')
+    expect((await draw($, 160)).rows[0]!).not.toContain('↻ 0:20')
   })
 
   test('desktop drops tokens, then the reset time, before its bars get short', async ($, on) => {
@@ -274,7 +274,7 @@ describe('band', () => {
     }
 
     const wide = (await draw($, 130, {}, 'desktop')).box
-    for (const part of ['84.1k', '↻1h20m']) expect(flat(wide as RenderNode)).toContain(part)
+    for (const part of ['84.1k', '↻ 1:20']) expect(flat(wide as RenderNode)).toContain(part)
     expect(strips(wide as RenderNode)).toBe(3)
 
     // Where the terminal would still squeeze tokens in beside short bars, the desktop gives them up
@@ -283,7 +283,7 @@ describe('band', () => {
     const { box } = await draw($, 90, {}, 'desktop')
     const text = flat(box as RenderNode)
     expect(text).not.toContain('84.1k')
-    for (const part of ['8%', '34%', '↻1h20m', '7%']) expect(text).toContain(part)
+    for (const part of ['8%', '34%', '↻ 1:20', '7%']) expect(text).toContain(part)
     expect(strips(box as RenderNode)).toBe(3)
     expect(box.props?.marginTop).toBe(1)
     expect((await draw($, 80)).rows[0]!).not.toContain('↻')

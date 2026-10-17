@@ -15,7 +15,7 @@ The card shows:
 - **Model** in use
 - **CTX**: how full the context window is, with tokens used / window size
 - **5H / 7D**: how much of your 5-hour and 7-day usage limits you've used (subscription plans),
-  and how long until the 5-hour window resets (`↻1h20m`)
+  and how long until the 5-hour window resets (`↻ 1:20`, hours:minutes)
 - **Effort / mode**: the current effort level and permission mode
 
 Percentages turn red at 90%. Colors follow your Claude Code theme, so the card
@@ -27,7 +27,7 @@ The card always stays on one line. As the window narrows it drops the token coun
 time first, then the bars, and keeps the percentages, effort and mode:
 
 ```
-OPUS 5.5  │  CTX ━━━━━━━━━━━━━━━   5%   48.1k / 1.0M  │  5H ━━━━━━━━━━━  62%  ↻1h20m  │  7D ━━━━━━━━━━━  45%  │  HIGH / AUTO
+OPUS 5.5  │  CTX ━━━━━━━━━━━━━━━   5%   48.1k / 1.0M  │  5H ━━━━━━━━━━━  62%  ↻ 1:20  │  7D ━━━━━━━━━━━  45%  │  HIGH / AUTO
 OPUS 5.5 │ CTX ━━━━━━━━━━━━━━━   5% │ 5H ━━━━━━━━━━━  62% │ 7D ━━━━━━━━━━━━  45% │ HIGH / AUTO
 OPUS 5.5 │ CTX ━━━━━━━   5% │ 5H ━━━━━  62% │ 7D ━━━━━━  45% │ HIGH / AUTO
 OPUS 5.5  │  CTX  5%  │  5H 62% │ 7D 45% │ HIGH / AUTO
