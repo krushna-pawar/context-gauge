@@ -48,7 +48,7 @@ export function fmtModel(id: string): string {
 export const fmtMode = (mode: string | null) => (mode === null ? DASH : (MODES[mode] ?? mode))
 
 // How much of a bar to fill, in percent: none for no use, at least MIN_FILL for any.
-export const fillPct = (pct: number | null) => (pct === null || pct <= 0 ? 0 : Math.min(100, Math.max(MIN_FILL, pct)))
+const fillPct = (pct: number | null) => (pct === null || pct <= 0 ? 0 : Math.min(100, Math.max(MIN_FILL, pct)))
 
 // Filled cells in Claude orange, the rest a dark track, whatever the percentage.
 export function bar(pct: number | null, width: number): Seg[] {
@@ -63,7 +63,7 @@ export function bar(pct: number | null, width: number): Seg[] {
 }
 
 // A percentage as its own segment, so tone applies to the digits alone.
-export const pctSeg = (pct: number | null): Seg =>
+const pctSeg = (pct: number | null): Seg =>
   pct === null
     ? seg(DASH, 'muted')
     : seg(`${Math.floor(pct)}%`, pct >= CRITICAL ? 'critical' : 'text')
@@ -101,7 +101,7 @@ const FITS: Fit[] = [
 ]
 
 // The desktop keeps the 5H countdown a step longer than the token count.
-export const DESKTOP_FITS: Fit[] = [
+const DESKTOP_FITS: Fit[] = [
   FITS[0]!,
   FITS[1]!,
   { gap: 1, tokens: false, resets: true, bars: true },
@@ -120,7 +120,7 @@ export function fmtIn(iso: string, now: number): string | null {
 }
 
 // `now` (ms) lets the 5h gauge say when it resets; without it it doesn't.
-export function gauges(s: CardInput, fit: Fit, now?: number): Gauge[] {
+function gauges(s: CardInput, fit: Fit, now?: number): Gauge[] {
   const used = value(s.ctxTokens === null ? null : fmtTokens(s.ctxTokens))
   const tokens: Row = fit.tokens
     ? [
@@ -159,12 +159,12 @@ const upper = (v: string | null): Seg =>
   v === null ? seg(DASH, 'muted') : { text: v.toUpperCase(), tone: 'accent', bold: true }
 
 // The rail's two ends: the model, and EFFORT / MODE.
-export const ends = (s: CardInput): { left: Seg; right: Row } => ({
+const ends = (s: CardInput): { left: Seg; right: Row } => ({
   left: s.model === null ? seg(DASH, 'muted') : { text: fmtModel(s.model).toUpperCase(), tone: 'text', bold: true },
   right: [upper(s.effort), seg(' / ', 'muted'), upper(s.mode === null ? null : fmtMode(s.mode))],
 })
 
-function rail(s: CardInput, inner: number, fit: Fit, minBar: number, now?: number, force = false): Row | null {
+function line(s: CardInput, inner: number, fit: Fit, minBar: number, now?: number, force = false): Row | null {
   const sep = seg(`${' '.repeat(fit.gap)}│${' '.repeat(fit.gap)}`, 'muted')
   const { left, right } = ends(s)
   const gs = gauges(s, fit, now)
@@ -199,9 +199,44 @@ export function buildCard(
   const paddingX = columns >= 60 ? 2 : 1
   const inner = width - 2 - paddingX * 2
   for (const fit of fits) {
-    const row = rail(s, inner, fit, minBar, now)
+    const row = line(s, inner, fit, minBar, now)
     if (row) return { width, inner, paddingX, rows: [clip(row, inner)], fit }
   }
   const fit = fits[fits.length - 1]!
-  return { width, inner, paddingX, rows: [clip(rail(s, inner, fit, minBar, now, true)!, inner)], fit }
+  return { width, inner, paddingX, rows: [clip(line(s, inner, fit, minBar, now, true)!, inner)], fit }
+}
+
+// The desktop's proportional text is narrower than the code font's cells, but its gaps are
+// wider, so what fits is judged on bodyColumns as is. Its bars keep at least this many cells:
+// below that, token counts go first, then the reset countdown.
+const DESKTOP_MIN_BAR = 6
+
+export type FlexGauge = { label: Seg; fill: number; pct: Seg; tail: Row }
+
+// What a surface draws. The terminal gets cell-counted rows. Any other surface (desktop,
+// vscode, mobile) sets text in a proportional font, where cell-counted padding comes up short,
+// so it gets the parts to lay out with flex: `gap` between every two items, the bars taking
+// whatever room is left when `bars`, and each gauge's `fill` in percent.
+export type Rail = { width: number; paddingX: number } & (
+  | { surface: 'terminal'; rows: Row[] }
+  | { surface: 'flex'; gap: number; bars: boolean; left: Seg; gauges: FlexGauge[]; right: Row }
+)
+
+export function rail(s: CardInput, surface: string, columns: number, now?: number): Rail {
+  const card = buildCard(s, columns, now)
+  const box = { width: card.width, paddingX: card.paddingX }
+  if (surface === 'terminal') return { ...box, surface: 'terminal', rows: card.rows }
+  const { fit } = buildCard(s, columns, now, { minBar: DESKTOP_MIN_BAR, fits: DESKTOP_FITS })
+  const { left, right } = ends(s)
+  return {
+    ...box,
+    surface: 'flex',
+    // One gap everywhere, around each │ and inside each gauge alike: the terminal's spaces
+    // around each │, but never none.
+    gap: Math.max(1, fit.gap),
+    bars: fit.bars,
+    left,
+    gauges: gauges(s, fit, now).map(g => ({ label: seg(g.label, 'muted'), fill: fillPct(g.pct), pct: pctSeg(g.pct), tail: g.tail })),
+    right,
+  }
 }

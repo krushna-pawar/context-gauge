@@ -169,6 +169,7 @@ describe('band', () => {
     }
   })
 
+  // What the desktop shows at which width is rail()'s, tested in format.test.ts; this checks the drawing.
   test('desktop: a flex row that fills the box, with every value', async ($, on) => {
     engine(on)
     await $.session.start({ source: 'startup', cwd: '/work' } as never)
@@ -186,9 +187,10 @@ describe('band', () => {
     expect(tree.props?.flexDirection).toBe('row')
     expect(tree.props?.width).toBe(150)
     expect(tree.props?.borderStyle).toBe('round')
+    expect(tree.props?.marginTop).toBe(1)
     const text = flat(tree as RenderNode)
     for (const part of ['OPUS 5.5', 'CTX', '6%', '60.9k', '1.0M', '5H', '4%', '7D', '40%', 'MEDIUM', 'AUTO']) expect(text).toContain(part)
-    // The 4% bar still shows a filled part.
+    // Each gauge's fill becomes its strip's width.
     const fills: unknown[] = []
     const walk = (n: RenderNode) => {
       if (typeof n === 'string' || !n) return
@@ -261,49 +263,6 @@ describe('band', () => {
     expect(row).toMatch(/5H ━+  62%  ↻ 0:20/)
     await clock.advance(30 * 60_000)
     expect((await draw($, 160)).rows[0]!).not.toContain('↻ 0:20')
-  })
-
-  test('desktop drops tokens, then the reset time, before its bars get short', async ($, on) => {
-    engine(on)
-    const at = (minutes: number) => new Date(NOW + minutes * 60_000).toISOString()
-    await $.session.measure({
-      context: { tokens: 84_123, window: 1_000_000, percent: 8 },
-      rateLimits: [
-        { kind: 'five_hour', percentUsed: 34, resetsAt: at(80) },
-        { kind: 'seven_day', percentUsed: 7, resetsAt: at(3 * 24 * 60 + 240) },
-      ],
-      changed: ['context', 'rateLimits'],
-    } as never)
-    const strips = (box: RenderNode) => {
-      let n = 0
-      const walk = (node: RenderNode) => {
-        if (typeof node === 'string' || !node) return
-        const el = node as { props?: Record<string, unknown>; children?: RenderNode[] }
-        if (el.props?.minWidth === 3) n++
-        ;(el.children ?? []).forEach(walk)
-      }
-      walk(box)
-      return n
-    }
-
-    const wide = (await draw($, 130, {}, 'desktop')).box
-    for (const part of ['84.1k', '↻ 1:20']) expect(flat(wide as RenderNode)).toContain(part)
-    expect(strips(wide as RenderNode)).toBe(3)
-
-    // Where the terminal would still squeeze tokens in beside short bars, the desktop gives them up
-    // but keeps the 5H countdown, which the terminal drops along with the tokens.
-    expect((await draw($, 90)).rows[0]!).toContain('84.1k')
-    const { box } = await draw($, 90, {}, 'desktop')
-    const text = flat(box as RenderNode)
-    expect(text).not.toContain('84.1k')
-    for (const part of ['8%', '34%', '↻ 1:20', '7%']) expect(text).toContain(part)
-    expect(strips(box as RenderNode)).toBe(3)
-    expect(box.props?.marginTop).toBe(1)
-    expect((await draw($, 80)).rows[0]!).not.toContain('↻')
-
-    const narrow = (await draw($, 74, {}, 'desktop')).box
-    expect(flat(narrow as RenderNode)).not.toContain('↻')
-    expect(strips(narrow as RenderNode)).toBe(3)
   })
 
   test('yields the band to a survey', async ($, on) => {

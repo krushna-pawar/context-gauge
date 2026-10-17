@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage, Timer } from 'claude-code'
 
 import type { Snap } from '../types'
-import { buildCard, DESKTOP_FITS, ends, fillPct, gauges, pctSeg, seg, type Row, type Seg, type Tone } from './format'
+import { rail, type Row, type Seg, type Tone } from './format'
 
 // Theme keys, not fixed colors, so the card reads on light themes as well as dark ones.
 const COLORS: Record<Tone, string> = {
@@ -15,10 +15,6 @@ const COLORS: Record<Tone, string> = {
 const BORDER = 'claude'
 // The desktop's bar thickness, in rows.
 const BAR_HEIGHT = 0.25
-// The desktop's proportional text is narrower than the code font's cells, but its gaps are
-// wider, so what fits is judged on bodyColumns as is. Its bars keep at least this many cells:
-// below that, token counts go first, then the reset countdown.
-const DESKTOP_MIN_BAR = 6
 
 const EMPTY: Snap = {
   model: null,
@@ -133,10 +129,8 @@ export const register: Register = on => {
 
     const { Box, Text } = $.ui.resolve(e)
     const s = await read($, snap)
-    const data = { ...EMPTY, ...s }
-    const now = await $.clock.now()
-    const card = buildCard(data, e.props.bodyColumns, now)
-    const box = { borderStyle: 'round', borderColor: BORDER, paddingX: card.paddingX, width: card.width } as const
+    const r = rail({ ...EMPTY, ...s }, e.surface, e.props.bodyColumns, await $.clock.now())
+    const box = { borderStyle: 'round', borderColor: BORDER, paddingX: r.paddingX, width: r.width } as const
     const span = (part: Seg, key?: string) => (
       <Text key={key} color={COLORS[part.tone]} bold={part.bold}>
         {part.text}
@@ -144,36 +138,27 @@ export const register: Register = on => {
     )
     const spans = (row: Row) => row.map((p, j) => span(p, String(j)))
 
-    // The desktop sets text in a proportional font, so cell-counted padding comes up short:
-    // lay the same rail out with flex instead, the bars taking whatever room is left.
-    if (e.surface !== 'terminal') {
-      const { fit } = buildCard(data, e.props.bodyColumns, now, { minBar: DESKTOP_MIN_BAR, fits: DESKTOP_FITS })
+    if (r.surface === 'flex') {
       const sep = <Text color={COLORS.muted}>│</Text>
-      const { left, right } = ends(data)
-      // One gap between every two items, around each │ and inside each gauge alike:
-      // the terminal's spaces around each │, but never none.
-      const gap = Math.max(1, fit.gap)
       return (
         // marginTop: a little air between the card and any row another plugin draws above it.
-        <Box {...box} marginTop={1} flexDirection="row" alignItems="center" columnGap={gap}>
-          <Box flexShrink={0}>{span(left)}</Box>
-          {gauges(data, fit, now).flatMap(g => [
+        <Box {...box} marginTop={1} flexDirection="row" alignItems="center" columnGap={r.gap}>
+          <Box flexShrink={0}>{span(r.left)}</Box>
+          {r.gauges.flatMap(g => [
             sep,
-            <Box flexDirection="row" alignItems="center" columnGap={gap} flexGrow={fit.bars ? 1 : 0} flexShrink={1} minWidth={0}>
-              <Box flexShrink={0}>{span(seg(g.label, 'muted'))}</Box>
-              {fit.bars ? (
+            <Box flexDirection="row" alignItems="center" columnGap={r.gap} flexGrow={r.bars ? 1 : 0} flexShrink={1} minWidth={0}>
+              <Box flexShrink={0}>{span(g.label)}</Box>
+              {r.bars ? (
                 // A thin strip, not a run of ━: the desktop sets glyphs in a proportional font.
                 <Box flexGrow={1} width={0} minWidth={3} height={1} alignItems="center">
                   <Box flexGrow={1} height={BAR_HEIGHT} backgroundColor={COLORS.track} flexDirection="row" overflow="hidden">
-                    {fillPct(g.pct) > 0 ? (
-                      <Box width={`${fillPct(g.pct)}%`} height="100%" backgroundColor={COLORS.accent} />
+                    {g.fill > 0 ? (
+                      <Box width={`${g.fill}%`} height="100%" backgroundColor={COLORS.accent} />
                     ) : null}
                   </Box>
                 </Box>
               ) : null}
-              <Box flexShrink={0}>
-                {span(pctSeg(g.pct))}
-              </Box>
+              <Box flexShrink={0}>{span(g.pct)}</Box>
               {g.tail.length ? (
                 <Box flexShrink={0} flexDirection="row">
                   {spans(g.tail)}
@@ -183,7 +168,7 @@ export const register: Register = on => {
           ])}
           {sep}
           <Box flexShrink={0} flexDirection="row">
-            {spans(right)}
+            {spans(r.right)}
           </Box>
         </Box>
       )
@@ -191,7 +176,7 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" {...box}>
-        {card.rows.map(row => (
+        {r.rows.map(row => (
           <Text wrap="truncate-end">
             {row.length === 0 ? ' ' : spans(row)}
           </Text>

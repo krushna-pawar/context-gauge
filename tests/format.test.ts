@@ -7,6 +7,7 @@ import {
   fmtModel,
   fmtMode,
   fmtTokens,
+  rail,
   rowText,
   type CardInput,
 } from '../hooks/format'
@@ -199,5 +200,71 @@ describe('rail', () => {
     const card = buildCard(FULL, 100, undefined, { minBar: 8 })
     expect(card.fit).toEqual({ gap: 1, tokens: false, resets: false, bars: true })
     expect(rowText(card.rows[0]!)).not.toContain('84.1k')
+  })
+})
+
+describe('rail() on a flex surface', () => {
+  const now = Date.parse('2026-10-17T12:00:00Z')
+  const at = (minutes: number) => new Date(now + minutes * 60_000).toISOString()
+  const S: CardInput = {
+    ...EMPTY,
+    ctxTokens: 84_123,
+    ctxWindow: 1_000_000,
+    ctxPercent: 8,
+    limits: [
+      { kind: 'five_hour', percentUsed: 34, resetsAt: at(80) },
+      { kind: 'seven_day', percentUsed: 7, resetsAt: at(3 * 24 * 60 + 240) },
+    ],
+  }
+  const flex = (input: CardInput, columns: number, surface = 'desktop') => {
+    const r = rail(input, surface, columns, now)
+    if (r.surface !== 'flex') throw new Error(`expected a flex rail, got ${r.surface}`)
+    return r
+  }
+  const tails = (r: ReturnType<typeof flex>) => r.gauges.map(g => rowText(g.tail))
+  const terminal = (input: CardInput, columns: number) => {
+    const r = rail(input, 'terminal', columns, now)
+    if (r.surface !== 'terminal') throw new Error(`expected a terminal rail, got ${r.surface}`)
+    return rowText(r.rows[0]!)
+  }
+
+  test('the terminal gets rows; every other surface gets the parts to lay out', () => {
+    expect(rail(S, 'terminal', 120, now).surface).toBe('terminal')
+    for (const surface of ['desktop', 'vscode', 'mobile']) expect(rail(S, surface, 120, now).surface).toBe('flex')
+    const r = flex(S, 120)
+    expect(r.width).toBe(120)
+    expect(r.paddingX).toBe(2)
+    expect(r.gauges.map(g => g.label.text)).toEqual(['CTX', '5H', '7D'])
+    expect(r.gauges.map(g => g.pct.text)).toEqual(['8%', '34%', '7%'])
+  })
+
+  test('fill: none for no use or no reading, at least 2% for any use', () => {
+    const r = flex({ ...S, ctxPercent: 0, limits: [{ kind: 'five_hour', percentUsed: 0.4 }] }, 130)
+    expect(r.gauges.map(g => g.fill)).toEqual([0, 2, 0])
+    expect(flex({ ...S, ctxPercent: 150 }, 130).gauges[0]!.fill).toBe(100)
+  })
+
+  test('one gap everywhere: the terminal spacing, never none', () => {
+    expect(flex(S, 160).gap).toBe(2)
+    expect(flex(S, 90).gap).toBe(1)
+    expect(flex(S, 24).gap).toBe(1)
+  })
+
+  test('drops tokens, then the reset time, before its bars get short', () => {
+    const wide = flex(S, 130)
+    expect(wide.bars).toBe(true)
+    expect(tails(wide)).toEqual(['84.1k / 1.0M', '↻ 1:20', ''])
+
+    // Where the terminal would still squeeze tokens in beside short bars, the desktop gives them up
+    // but keeps the 5H countdown, which the terminal drops along with the tokens.
+    expect(terminal(S, 90)).toContain('84.1k')
+    const mid = flex(S, 90)
+    expect(mid.bars).toBe(true)
+    expect(tails(mid)).toEqual(['', '↻ 1:20', ''])
+    expect(terminal(S, 80)).not.toContain('↻')
+
+    const narrow = flex(S, 74)
+    expect(narrow.bars).toBe(true)
+    expect(tails(narrow)).toEqual(['', '', ''])
   })
 })
