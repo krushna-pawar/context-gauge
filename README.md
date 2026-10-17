@@ -14,11 +14,36 @@ The card shows:
 
 - **Model** in use
 - **CTX**: how full the context window is, with tokens used / window size
-- **5H / 7D**: how much of your 5-hour and 7-day usage limits you've used (subscription plans)
+- **5H / 7D**: how much of your 5-hour and 7-day usage limits you've used (subscription plans),
+  and how long until each resets (`↻1h20m`)
 - **Effort / mode**: the current effort level and permission mode
 
-Percentages turn red at 90%. The card fits itself to the terminal width, dropping the token
-count and then the bars as space runs out. In the desktop app it lays out to fit the window's font.
+Percentages turn amber at 70% and red at 90%. Colors follow your Claude Code theme, so the card
+reads on light themes as well as dark ones.
+
+## Narrow windows
+
+The card always stays on one line. As the window narrows it drops the token count and reset
+times first, then the bars, and keeps the percentages, effort and mode:
+
+```
+OPUS 5.5  │  CTX ━━━━━━━━━━━━   5%   48.1k / 1.0M  │  5H ━━━━━━━━━  62%  ↻1h20m  │  7D ━━━━━━━━━  45%  ↻3d4h  │  HIGH / AUTO
+OPUS 5.5 │ CTX ━━━━━━━━━━━━━━━   5% │ 5H ━━━━━━━━━━━  62% │ 7D ━━━━━━━━━━━━  45% │ HIGH / AUTO
+OPUS 5.5 │ CTX ━━━━━━━   5% │ 5H ━━━━━  62% │ 7D ━━━━━━  45% │ HIGH / AUTO
+OPUS 5.5  │  CTX  5%  │  5H 62% │ 7D 45% │ HIGH / AUTO
+```
+
+In the desktop app the same row is laid out to fit the window's font, with thin bars.
+
+## Known limits
+
+- **Mode after Shift+Tab** updates with your next prompt or tool call: Claude Code raises no
+  event for the key itself.
+- **Effort** shows `—` until Claude's first request in a session, unless it's saved in your
+  settings (`/effort` saves it).
+- **5H / 7D** show `—` until Claude Code has a reading, usually after the first request, and
+  only on subscription plans.
+- The `[-]` beside the card is Claude Code's own collapse button; the mod can't hide it.
 
 ## Install
 

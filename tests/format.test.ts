@@ -3,6 +3,7 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   bar,
   buildCard,
+  fmtIn,
   fmtModel,
   fmtMode,
   fmtTokens,
@@ -156,8 +157,24 @@ describe('rail', () => {
     expect(lines({ ...FULL, mode: 'auto' }, 160).text[0]!.endsWith('HIGH / AUTO')).toBe(true)
   })
 
-  test('90% and over marks the digits critical', () => {
-    const row = buildCard({ ...FULL, limits: [{ kind: 'five_hour', percentUsed: 93 }] }, 160).rows[0]!
+  test('90% and over marks the digits critical, 70% and over a warning', () => {
+    const row = buildCard({ ...FULL, ctxPercent: 69, limits: [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 70 }] }, 160).rows[0]!
     expect(row.find(s => s.text === '93%')?.tone).toBe('critical')
+    expect(row.find(s => s.text === '70%')?.tone).toBe('warning')
+    expect(row.find(s => s.text === '69%')?.tone).toBe('text')
+  })
+
+  test('reset countdown: rounded up to the minute, gone once past or without a clock', () => {
+    const now = Date.parse('2026-10-17T12:00:00Z')
+    const at = (ms: number) => new Date(now + ms).toISOString()
+    expect(fmtIn(at(30_000), now)).toBe('1m')
+    expect(fmtIn(at(42 * 60_000), now)).toBe('42m')
+    expect(fmtIn(at(80 * 60_000), now)).toBe('1h20m')
+    expect(fmtIn(at((3 * 24 + 4) * 3_600_000), now)).toBe('3d4h')
+    expect(fmtIn(at(0), now)).toBe(null)
+    expect(fmtIn('not a date', now)).toBe(null)
+    const s = { ...FULL, limits: [{ kind: 'five_hour', percentUsed: 31, resetsAt: at(80 * 60_000) }] }
+    expect(lines(s, 160).text[0]!).not.toContain('↻')
+    expect(rowText(buildCard(s, 160, now).rows[0]!)).toContain('31%  ↻1h20m')
   })
 })

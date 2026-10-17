@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, mock, test } from 'claude-code/testing'
 import type { On, RenderNode } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
@@ -24,7 +24,10 @@ const draw = async ($: Engine, columns: number, extra = {}, surface: 'terminal' 
 
 // What the engine itself answers beneath the plugin, for the events this test raises.
 // `settings` stands for the merged settings.json; `/effort` writes into it as it runs.
+const NOW = Date.parse('2026-10-17T12:00:00Z')
+
 const engine = (on: On, settings: Record<string, unknown> = {}) => {
+  const clock = mock.clock(on, { now: NOW })
   on('settings.read', () => ({ value: { ...settings } }))
   on('command.run', { command: 'effort' }, (_$, e) => {
     if (e.args) settings.effortLevel = e.args
@@ -42,6 +45,7 @@ const engine = (on: On, settings: Record<string, unknown> = {}) => {
   on('turn.step', async function* (_$, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: null }
   })
+  return clock
 }
 
 const inner = (box: { props?: Record<string, unknown> }) =>
@@ -53,7 +57,7 @@ describe('band', () => {
     const { box, rows } = await draw($, 150)
     expect(box.type).toBe('Box')
     expect(box.props?.borderStyle).toBe('round')
-    expect(box.props?.borderColor).toBe('#D97757')
+    expect(box.props?.borderColor).toBe('claude')
     expect(box.props?.width).toBe(150)
     expect(rows.length).toBe(1)
     expect(rows[0]!.startsWith('—  │  CTX ')).toBe(true)
@@ -219,6 +223,28 @@ describe('band', () => {
     const row = (await draw($, 150)).rows[0]!
     expect(row).toMatch(/5H ━+  31%/)
     expect(row).toMatch(/7D ━+  12%/)
+  })
+
+  test('5H and 7D say when they reset, and the countdown moves with the clock', async ($, on) => {
+    const clock = engine(on)
+    const at = (minutes: number) => new Date(NOW + minutes * 60_000).toISOString()
+    await $.session.measure({
+      context: { tokens: 5_000, window: 200_000, percent: 2 },
+      rateLimits: [
+        { kind: 'five_hour', percentUsed: 62, resetsAt: at(80) },
+        { kind: 'seven_day', percentUsed: 12, resetsAt: at(3 * 24 * 60 + 4 * 60) },
+      ],
+      changed: ['context', 'rateLimits'],
+    } as never)
+    let row = (await draw($, 160)).rows[0]!
+    expect(row).toMatch(/5H ━+  62%  ↻1h20m/)
+    expect(row).toMatch(/7D ━+  12%  ↻3d4h/)
+    expect(flat((await draw($, 160, {}, 'desktop')).box as RenderNode)).toContain('↻1h20m')
+    await clock.advance(60 * 60_000)
+    row = (await draw($, 160)).rows[0]!
+    expect(row).toMatch(/5H ━+  62%  ↻20m/)
+    await clock.advance(30 * 60_000)
+    expect((await draw($, 160)).rows[0]!).not.toContain('↻20m')
   })
 
   test('yields the band to a survey', async ($, on) => {

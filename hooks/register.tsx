@@ -1,17 +1,19 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, SessionUsage } from 'claude-code'
+import type { EngineInterface, Register, SessionUsage, Timer } from 'claude-code'
 
 import type { Snap } from '../types'
 import { buildCard, ends, fillPct, gauges, pctSeg, seg, type Row, type Seg, type Tone } from './format'
 
+// Theme keys, not fixed colors, so the card reads on light themes as well as dark ones.
 const COLORS: Record<Tone, string> = {
-  text: '#F0EBE3',
-  muted: '#8C8C8C',
-  accent: '#D97757',
-  critical: '#B5584E',
-  track: '#3A3A3A',
+  text: 'text',
+  muted: 'inactive',
+  accent: 'claude',
+  warning: 'warning',
+  critical: 'error',
+  track: 'subtle',
 }
-const BORDER = '#D97757'
+const BORDER = 'claude'
 // The desktop's bar thickness, in rows.
 const BAR_HEIGHT = 0.25
 
@@ -38,7 +40,7 @@ const fromUsage = (u: Pick<SessionUsage, 'context' | 'rateLimits'>): Partial<Sna
   ctxTokens: u.context.tokens ?? null,
   ctxWindow: u.context.window ?? null,
   ctxPercent: u.context.percent ?? null,
-  ...(u.rateLimits.length ? { limits: u.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed })) } : {}),
+  ...(u.rateLimits.length ? { limits: u.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed, resetsAt: r.resetsAt })) } : {}),
 })
 
 const model = ($: EngineInterface) => $.session.model().catch(() => null)
@@ -64,8 +66,12 @@ const noteMode = async ($: EngineInterface, e: { agent_id?: string; permission_m
   if (e.agent_id === undefined && e.permission_mode) await patch($, { mode: e.permission_mode })
 }
 
+// Redraws once a minute so the reset countdowns stay current; one per loaded module.
+let tick: Timer | undefined
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    tick ??= $.clock.every(60_000, () => $.ui.invalidate('ui.render'))
     const [name, usage, set] = await Promise.all([model($), $.session.usage().catch(() => null), settings($)])
     // Settings only seed what nothing has reported yet: a request's effort and a hook's mode are truer.
     await update($, snap, s => {
@@ -125,7 +131,8 @@ export const register: Register = on => {
     const { Box, Text } = $.ui.resolve(e)
     const s = await read($, snap)
     const data = { ...EMPTY, ...s }
-    const card = buildCard(data, e.props.bodyColumns)
+    const now = await $.clock.now()
+    const card = buildCard(data, e.props.bodyColumns, now)
     const box = { borderStyle: 'round', borderColor: BORDER, paddingX: card.paddingX, width: card.width } as const
     const span = (part: Seg, key?: string) => (
       <Text key={key} color={COLORS[part.tone]} bold={part.bold}>
@@ -143,7 +150,7 @@ export const register: Register = on => {
       return (
         <Box {...box} flexDirection="row" alignItems="center" columnGap={fit.gap + 1}>
           <Box flexShrink={0}>{span(left)}</Box>
-          {gauges(data, fit).flatMap(g => [
+          {gauges(data, fit, now).flatMap(g => [
             sep,
             <Box flexDirection="row" alignItems="center" columnGap={1} flexGrow={fit.bars ? 1 : 0} flexShrink={1} minWidth={0}>
               <Box flexShrink={0}>{span(seg(g.label, 'muted'))}</Box>

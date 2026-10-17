@@ -1,10 +1,10 @@
 {
   "name": "context-gauge",
-  "version": "0.4.2",
-  "description": "A single-line status rail above the prompt: model, context, 5h/7d usage, effort and mode.",
+  "version": "0.5.0",
+  "description": "A one-line card above the Claude Code prompt: model, context window, 5h/7d usage, effort and mode.",
   "types": "./types/index.d.ts",
   "author": {
-    "name": "Krushna",
+    "name": "Krushna Pawar",
     "url": "https://github.com/krushna-pawar"
   },
   "repository": "https://github.com/krushna-pawar/context-gauge",

@@ -1,6 +1,6 @@
 import type { Snap } from '../types'
 
-export type Tone = 'text' | 'muted' | 'accent' | 'critical' | 'track'
+export type Tone = 'text' | 'muted' | 'accent' | 'warning' | 'critical' | 'track'
 export type Seg = { text: string; tone: Tone; bold?: boolean }
 export type Row = Seg[]
 export type CardInput = Snap
@@ -9,6 +9,7 @@ export type Card = { width: number; inner: number; paddingX: number; rows: Row[]
 const MIN_BAR = 3
 // The least share of a bar any use fills, so 4% never reads as empty.
 const MIN_FILL = 2
+const WARNING = 70
 const CRITICAL = 90
 const DASH = '—'
 
@@ -64,7 +65,9 @@ export function bar(pct: number | null, width: number): Seg[] {
 
 // A percentage as its own segment, so tone applies to the digits alone.
 export const pctSeg = (pct: number | null): Seg =>
-  pct === null ? seg(DASH, 'muted') : seg(`${Math.floor(pct)}%`, pct >= CRITICAL ? 'critical' : 'text')
+  pct === null
+    ? seg(DASH, 'muted')
+    : seg(`${Math.floor(pct)}%`, pct >= CRITICAL ? 'critical' : pct >= WARNING ? 'warning' : 'text')
 
 // The same, right-aligned in a field of cells.
 function percent(pct: number | null, field = 4): Seg[] {
@@ -97,9 +100,22 @@ const FITS: Fit[] = [
   { gap: 0, tokens: false, bars: false },
 ]
 
-type Gauge = { label: string; pct: number | null; tail: Row }
+// `steady`: cells the tail's first segment is padded to, so the bar keeps its length as it grows.
+type Gauge = { label: string; pct: number | null; tail: Row; steady?: number }
 
-export function gauges(s: CardInput, fit: Fit): Gauge[] {
+// Time until an ISO timestamp, rounded up to the minute: `42m`, `1h20m`, `3d4h`; null once past.
+export function fmtIn(iso: string, now: number): string | null {
+  const ms = Date.parse(iso) - now
+  if (!(ms > 0)) return null
+  const minutes = Math.ceil(ms / 60_000)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h${minutes % 60}m`
+  return `${Math.floor(hours / 24)}d${hours % 24}h`
+}
+
+// `now` (ms) lets the 5h/7d gauges say when they reset; without it they don't.
+export function gauges(s: CardInput, fit: Fit, now?: number): Gauge[] {
   const used = value(s.ctxTokens === null ? null : fmtTokens(s.ctxTokens))
   const tokens: Row = fit.tokens
     ? [
@@ -109,21 +125,21 @@ export function gauges(s: CardInput, fit: Fit): Gauge[] {
       ]
     : []
   return [
-    { label: 'CTX', pct: s.ctxPercent, tail: tokens },
-    ...WINDOWS.map(([kind, label]) => ({
-      label,
-      pct: s.limits.find(l => l.kind === kind)?.percentUsed ?? null,
-      tail: [],
-    })),
+    // The used figure grows from "9.5k" to "84.1k".
+    { label: 'CTX', pct: s.ctxPercent, tail: tokens, steady: 6 },
+    ...WINDOWS.map(([kind, label]) => {
+      const limit = s.limits.find(l => l.kind === kind)
+      const resets = fit.tokens && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
+      return { label, pct: limit?.percentUsed ?? null, tail: resets === null ? [] : [seg(`↻${resets}`, 'muted')] }
+    }),
   ]
 }
 
-// The tail's lead keeps the bar's length steady as the used figure grows from "9.5k" to "84.1k".
 const gauge = (g: Gauge, width: number | null): Row => [
   seg(g.label, 'muted'),
   ...(width === null ? [] : [spaces(1), ...bar(g.pct, width), spaces(1)]),
   ...percent(g.pct),
-  ...(g.tail.length ? [spaces(2 + 6 - g.tail[0]!.text.length), ...g.tail] : []),
+  ...(g.tail.length ? [spaces(2 + Math.max(0, (g.steady ?? 0) - g.tail[0]!.text.length)), ...g.tail] : []),
 ]
 
 // Context takes 40% of the free cells; the 5h and 7d bars share the rest.
@@ -142,10 +158,10 @@ export const ends = (s: CardInput): { left: Seg; right: Row } => ({
   right: [upper(s.effort), seg(' / ', 'muted'), upper(s.mode === null ? null : fmtMode(s.mode))],
 })
 
-function rail(s: CardInput, inner: number, fit: Fit, force = false): Row | null {
+function rail(s: CardInput, inner: number, fit: Fit, now?: number, force = false): Row | null {
   const sep = seg(`${' '.repeat(fit.gap)}│${' '.repeat(fit.gap)}`, 'muted')
   const { left, right } = ends(s)
-  const gs = gauges(s, fit)
+  const gs = gauges(s, fit, now)
 
   // `pads` widens each separator's two sides, so leftover cells spread evenly rather than pool.
   const build = (widths: (number | null)[], pads: number[] = []): Row => {
@@ -166,14 +182,14 @@ function rail(s: CardInput, inner: number, fit: Fit, force = false): Row | null 
 }
 
 // One full-width line: model │ CTX bar │ 5H bar │ 7D bar │ EFFORT / MODE.
-export function buildCard(s: CardInput, columns: number): Card {
+export function buildCard(s: CardInput, columns: number, now?: number): Card {
   const width = Math.max(columns, 4)
   const paddingX = columns >= 60 ? 2 : 1
   const inner = width - 2 - paddingX * 2
   for (const fit of FITS) {
-    const row = rail(s, inner, fit)
+    const row = rail(s, inner, fit, now)
     if (row) return { width, inner, paddingX, rows: [clip(row, inner)], fit }
   }
   const fit = FITS[FITS.length - 1]!
-  return { width, inner, paddingX, rows: [clip(rail(s, inner, fit, true)!, inner)], fit }
+  return { width, inner, paddingX, rows: [clip(rail(s, inner, fit, now, true)!, inner)], fit }
 }
