@@ -16,6 +16,9 @@ const COLORS: Record<Tone, string> = {
 const BORDER = 'claude'
 // The desktop's bar thickness, in rows.
 const BAR_HEIGHT = 0.25
+// The desktop sets text in a proportional font, which takes roughly this share of the code
+// font's cells that bodyColumns counts; what fits is judged on that wider count.
+const DESKTOP_TEXT_SHARE = 0.8
 
 const EMPTY: Snap = {
   model: null,
@@ -144,11 +147,12 @@ export const register: Register = on => {
     // The desktop sets text in a proportional font, so cell-counted padding comes up short:
     // lay the same rail out with flex instead, the bars taking whatever room is left.
     if (e.surface !== 'terminal') {
-      const { fit } = card
+      const { fit } = buildCard(data, Math.floor(e.props.bodyColumns / DESKTOP_TEXT_SHARE), now)
       const sep = <Text color={COLORS.muted}>│</Text>
       const { left, right } = ends(data)
       return (
-        <Box {...box} flexDirection="row" alignItems="center" columnGap={fit.gap + 1}>
+        // marginTop: a little air between the card and any row another plugin draws above it.
+        <Box {...box} marginTop={1} flexDirection="row" alignItems="center" columnGap={fit.gap + 1}>
           <Box flexShrink={0}>{span(left)}</Box>
           {gauges(data, fit, now).flatMap(g => [
             sep,

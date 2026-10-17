@@ -247,6 +247,24 @@ describe('band', () => {
     expect((await draw($, 160)).rows[0]!).not.toContain('↻20m')
   })
 
+  test('desktop keeps tokens and reset times where the terminal would drop them', async ($, on) => {
+    engine(on)
+    const at = (minutes: number) => new Date(NOW + minutes * 60_000).toISOString()
+    await $.session.measure({
+      context: { tokens: 84_123, window: 1_000_000, percent: 8 },
+      rateLimits: [
+        { kind: 'five_hour', percentUsed: 34, resetsAt: at(80) },
+        { kind: 'seven_day', percentUsed: 7, resetsAt: at(3 * 24 * 60 + 240) },
+      ],
+      changed: ['context', 'rateLimits'],
+    } as never)
+    expect((await draw($, 88)).rows[0]!).not.toContain('84.1k')
+    const { box } = await draw($, 88, {}, 'desktop')
+    const text = flat(box as RenderNode)
+    for (const part of ['84.1k', '↻1h20m', '↻3d4h']) expect(text).toContain(part)
+    expect(box.props?.marginTop).toBe(1)
+  })
+
   test('yields the band to a survey', async ($, on) => {
     engine(on)
     on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
