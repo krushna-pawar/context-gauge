@@ -198,8 +198,19 @@ describe('band', () => {
     }
     walk(tree as RenderNode)
     expect(fills).toEqual(['6%', '4%', '40%'])
-    // The separators keep the terminal's spacing, not more.
-    expect(tree.props?.columnGap).toBe(2)
+    // One gap everywhere, the terminal's spacing around each │, and no fixed-width slots padding text.
+    const gaps = new Set<unknown>()
+    const slots: unknown[] = []
+    const walkGaps = (n: RenderNode) => {
+      if (typeof n === 'string' || !n) return
+      const el = n as { props?: Record<string, unknown>; children?: RenderNode[] }
+      if (el.props?.columnGap !== undefined) gaps.add(el.props.columnGap)
+      if (typeof el.props?.width === 'number' && el !== tree) slots.push(el.props.width)
+      ;(el.children ?? []).forEach(walkGaps)
+    }
+    walkGaps(tree as RenderNode)
+    expect([...gaps]).toEqual([2])
+    expect(slots.filter(w => w !== 0)).toEqual([])
   })
 
   test('desktop: narrow widths still draw one row', async ($, on) => {

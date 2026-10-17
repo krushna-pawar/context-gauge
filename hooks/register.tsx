@@ -150,14 +150,16 @@ export const register: Register = on => {
       const { fit } = buildCard(data, e.props.bodyColumns, now, { minBar: DESKTOP_MIN_BAR, fits: DESKTOP_FITS })
       const sep = <Text color={COLORS.muted}>│</Text>
       const { left, right } = ends(data)
+      // One gap between every two items, around each │ and inside each gauge alike:
+      // the terminal's spaces around each │, but never none.
+      const gap = Math.max(1, fit.gap)
       return (
         // marginTop: a little air between the card and any row another plugin draws above it.
-        // columnGap: the terminal's spaces around each │, but never none.
-        <Box {...box} marginTop={1} flexDirection="row" alignItems="center" columnGap={Math.max(1, fit.gap)}>
+        <Box {...box} marginTop={1} flexDirection="row" alignItems="center" columnGap={gap}>
           <Box flexShrink={0}>{span(left)}</Box>
           {gauges(data, fit, now).flatMap(g => [
             sep,
-            <Box flexDirection="row" alignItems="center" columnGap={1} flexGrow={fit.bars ? 1 : 0} flexShrink={1} minWidth={0}>
+            <Box flexDirection="row" alignItems="center" columnGap={gap} flexGrow={fit.bars ? 1 : 0} flexShrink={1} minWidth={0}>
               <Box flexShrink={0}>{span(seg(g.label, 'muted'))}</Box>
               {fit.bars ? (
                 // A thin strip, not a run of ━: the desktop sets glyphs in a proportional font.
@@ -169,8 +171,7 @@ export const register: Register = on => {
                   </Box>
                 </Box>
               ) : null}
-              {/* Left-aligned in a fixed slot: the same gap after every bar, whatever the digits. */}
-              <Box flexShrink={0} width={4}>
+              <Box flexShrink={0}>
                 {span(pctSeg(g.pct))}
               </Box>
               {g.tail.length ? (
