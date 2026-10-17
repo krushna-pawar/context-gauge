@@ -38,6 +38,7 @@ const engine = (on: On, settings: Record<string, unknown> = {}) => {
   on('turn.start', (_$, e) => ({ turnId: e.turnId }))
   on('session.measure', (_$, e) => ({ changed: e.changed }))
   on('classic.UserPromptSubmit', () => ({}))
+  on('classic.SessionStart', () => ({}))
   on('turn.step', async function* (_$, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: null }
   })
@@ -201,6 +202,23 @@ describe('band', () => {
       const { box } = await draw($, columns, {}, 'desktop')
       expect(box.props?.flexDirection).toBe('row')
     }
+  })
+
+  test('a new or resumed session shows its mode before the first prompt', async ($, on) => {
+    engine(on)
+    await $.classic.SessionStart({ source: 'resume', permission_mode: 'plan' } as never)
+    expect((await draw($, 150)).rows[0]!.endsWith('— / PLAN')).toBe(true)
+  })
+
+  test('a measurement with no 5h/7d readings keeps the last ones', async ($, on) => {
+    engine(on)
+    const measure = (rateLimits: { kind: string; percentUsed: number }[]) =>
+      $.session.measure({ context: { tokens: 5_000, window: 200_000, percent: 2 }, rateLimits, changed: ['context', 'rateLimits'] } as never)
+    await measure([{ kind: 'five_hour', percentUsed: 31 }, { kind: 'seven_day', percentUsed: 12 }])
+    await measure([])
+    const row = (await draw($, 150)).rows[0]!
+    expect(row).toMatch(/5H ━+  31%/)
+    expect(row).toMatch(/7D ━+  12%/)
   })
 
   test('yields the band to a survey', async ($, on) => {

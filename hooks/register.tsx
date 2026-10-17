@@ -32,11 +32,13 @@ const patch = ($: EngineInterface, change: Partial<Snap>) =>
   update($, snap, s => ({ ...EMPTY, ...s, ...change }))
 
 // The status line's figures, as pushed by session.measure or read by $.session.usage().
+// The 5h/7d windows are the account's: a response that reports none (a fresh or resumed
+// session before its first request) leaves the last readings standing.
 const fromUsage = (u: Pick<SessionUsage, 'context' | 'rateLimits'>): Partial<Snap> => ({
   ctxTokens: u.context.tokens ?? null,
   ctxWindow: u.context.window ?? null,
   ctxPercent: u.context.percent ?? null,
-  limits: u.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed })),
+  ...(u.rateLimits.length ? { limits: u.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed })) } : {}),
 })
 
 const model = ($: EngineInterface) => $.session.model().catch(() => null)
@@ -72,8 +74,6 @@ export const register: Register = on => {
         ...was,
         model: name,
         ...(usage ? fromUsage(usage) : {}),
-        // A fresh session may not have measured the account's windows yet; the last ones still hold.
-        limits: usage?.rateLimits.length ? (fromUsage(usage).limits ?? []) : was.limits,
         effort: was.effort ?? effortIn(set),
         mode: was.mode ?? modeIn(set),
       }
@@ -112,7 +112,9 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // Permission mode rides the classic hook payloads; no event fires on Shift+Tab itself.
+  // Permission mode rides the classic hook payloads, SessionStart's included, so a new or
+  // resumed session shows it before the first prompt; no event fires on Shift+Tab itself.
+  on('classic.SessionStart', async ($, e, next) => (await noteMode($, e), next(e)))
   on('classic.UserPromptSubmit', async ($, e, next) => (await noteMode($, e), next(e)))
   on('classic.PostToolUse', async ($, e, next) => (await noteMode($, e), next(e)))
   on('classic.Stop', async ($, e, next) => (await noteMode($, e), next(e)))

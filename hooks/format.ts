@@ -31,16 +31,18 @@ const rowLength = (row: Row) => rowText(row).length
 export function fmtTokens(n: number): string {
   const short = (v: number) => (v >= 100 ? String(Math.round(v)) : String(Math.round(v * 10) / 10))
   if (n < 1000) return String(n)
-  if (n < 1_000_000) return `${short(n / 1000)}k`
+  // 999.5k and up would round to "1000k": those read as 1.0M.
+  if (n < 999_500) return `${short(n / 1000)}k`
   return `${(n / 1_000_000).toFixed(1)}M`
 }
 
-// `claude-opus-5-5[1m]` → `Opus 5.5`; anything not spelled that way is shown as given.
+// `claude-opus-5-5[1m]` → `Opus 5.5`, `claude-sonnet-4-20250514` → `Sonnet 4`;
+// anything not spelled that way is shown as given.
 export function fmtModel(id: string): string {
-  const m = /^claude-([a-z]+)-(\d+)-(\d{1,2})(?!\d)/.exec(id)
+  const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(id)
   if (!m) return id
   const [, family = '', major, minor] = m
-  return `${family.charAt(0).toUpperCase()}${family.slice(1)} ${major}.${minor}`
+  return `${family.charAt(0).toUpperCase()}${family.slice(1)} ${major}${minor === undefined ? '' : `.${minor}`}`
 }
 
 export const fmtMode = (mode: string | null) => (mode === null ? DASH : (MODES[mode] ?? mode))
