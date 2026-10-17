@@ -176,11 +176,7 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" {...box}>
-        {r.rows.map(row => (
-          <Text wrap="truncate-end">
-            {row.length === 0 ? ' ' : spans(row)}
-          </Text>
-        ))}
+        <Text wrap="truncate-end">{spans(r.row)}</Text>
       </Box>
     )
   })

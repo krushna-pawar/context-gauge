@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'claude-code/testing'
+import type { RenderSurface } from 'claude-code'
 
 import {
   bar,
@@ -37,11 +38,11 @@ const EMPTY: CardInput = {
 
 const lines = (input: CardInput, columns: number) => {
   const card = buildCard(input, columns)
-  return { card, text: card.rows.map(rowText) }
+  return { card, text: rowText(card.row) }
 }
 
 const barCells = (input: CardInput, columns: number) =>
-  buildCard(input, columns).rows[0]!.filter(seg => /^━+$/.test(seg.text)).reduce((n, seg) => n + seg.text.length, 0)
+  buildCard(input, columns).row.filter(seg => /^━+$/.test(seg.text)).reduce((n, seg) => n + seg.text.length, 0)
 
 describe('formatters', () => {
   test('tokens', () => {
@@ -89,20 +90,19 @@ describe('rail', () => {
   test('one row, full width, every value in order', () => {
     const { card, text } = lines(FULL, 160)
     expect(card.width).toBe(160)
-    expect(text.length).toBe(1)
-    expect(text[0]!.length).toBe(card.inner)
-    expect(text[0]!).toMatch(/^OPUS 5\.5  │  CTX ━+  42%   84\.1k \/ 200k  │  5H ━+  31%  │  7D ━+  12%  │  HIGH \/ DEFAULT$/)
+    expect(text.length).toBe(card.inner)
+    expect(text).toMatch(/^OPUS 5\.5  │  CTX ━+  42%   84\.1k \/ 200k  │  5H ━+  31%  │  7D ━+  12%  │  HIGH \/ DEFAULT$/)
   })
 
   test('every filled bar is accent, never another tone', () => {
     const fills = buildCard({ ...FULL, ctxPercent: 95, limits: [{ kind: 'five_hour', percentUsed: 90 }, { kind: 'seven_day', percentUsed: 50 }] }, 120)
-      .rows[0]!.filter(s => /^━+$/.test(s.text))
+      .row.filter(s => /^━+$/.test(s.text))
     expect(fills.map(s => s.tone)).toEqual(['accent', 'track', 'accent', 'track', 'accent', 'track'])
   })
 
   test('bars grow with the width and the context bar is the longest', () => {
     expect(barCells(FULL, 200) > barCells(FULL, 120)).toBe(true)
-    const row = buildCard(FULL, 140).rows[0]!
+    const row = buildCard(FULL, 140).row
     const bars: number[] = []
     let run = 0
     for (const s of row) {
@@ -117,49 +117,48 @@ describe('rail', () => {
   test('fills the inner width exactly, never wider, at any width', () => {
     for (const columns of [240, 160, 120, 100, 80, 76, 64, 52, 44, 36, 32, 24]) {
       const { card, text } = lines(FULL, columns)
-      expect(text.length).toBe(1)
-      expect(text[0]!.length <= card.inner).toBe(true)
-      if (columns >= 52) expect(text[0]!.length).toBe(card.inner)
+      expect(text.length <= card.inner).toBe(true)
+      if (columns >= 52) expect(text.length).toBe(card.inner)
     }
   })
 
   test('narrowing drops token counts, then bars, keeping percentages and the right block', () => {
-    const mid = lines(FULL, 80).text[0]!
+    const mid = lines(FULL, 80).text
     expect(mid).not.toContain('84.1k')
     expect(mid).toContain('━')
-    const small = lines(FULL, 64).text[0]!
+    const small = lines(FULL, 64).text
     expect(small).not.toContain('━')
     expect(small).toContain('42%')
     expect(small).not.toMatch(/ {6}/)
     expect(small.endsWith('HIGH / DEFAULT')).toBe(true)
-    expect(lines({ ...FULL, mode: 'auto' }, 48).text[0]!.endsWith('HIGH / AUTO')).toBe(true)
+    expect(lines({ ...FULL, mode: 'auto' }, 48).text.endsWith('HIGH / AUTO')).toBe(true)
   })
 
   test('missing data shows a dash, never a guess', () => {
     const { text } = lines(EMPTY, 160)
-    expect(text[0]!.startsWith('—  │  CTX ')).toBe(true)
-    expect(text[0]!).toContain('— / —')
-    expect(text[0]!).not.toContain('%')
-    expect(text[0]!.endsWith('— / —')).toBe(true)
-    expect(buildCard(EMPTY, 160).rows[0]!.some(s => s.tone === 'accent' && /━/.test(s.text))).toBe(false)
+    expect(text.startsWith('—  │  CTX ')).toBe(true)
+    expect(text).toContain('— / —')
+    expect(text).not.toContain('%')
+    expect(text.endsWith('— / —')).toBe(true)
+    expect(buildCard(EMPTY, 160).row.some(s => s.tone === 'accent' && /━/.test(s.text))).toBe(false)
   })
 
   test('window known before the first response', () => {
-    expect(lines({ ...EMPTY, ctxWindow: 200_000 }, 160).text[0]!).toContain('— / 200k')
+    expect(lines({ ...EMPTY, ctxWindow: 200_000 }, 160).text).toContain('— / 200k')
   })
 
   test('no subscription windows: 5H and 7D show a dash', () => {
-    const t = lines({ ...FULL, limits: [{ kind: 'spend_limit', percentUsed: 50 }] }, 160).text[0]!
+    const t = lines({ ...FULL, limits: [{ kind: 'spend_limit', percentUsed: 50 }] }, 160).text
     expect(t).toMatch(/5H ━+ +—  │  7D ━+ +—  │/)
   })
 
   test('mode names are shown as words, upper-cased', () => {
-    expect(lines({ ...FULL, mode: 'acceptEdits' }, 160).text[0]!.endsWith('HIGH / ACCEPT EDITS')).toBe(true)
-    expect(lines({ ...FULL, mode: 'auto' }, 160).text[0]!.endsWith('HIGH / AUTO')).toBe(true)
+    expect(lines({ ...FULL, mode: 'acceptEdits' }, 160).text.endsWith('HIGH / ACCEPT EDITS')).toBe(true)
+    expect(lines({ ...FULL, mode: 'auto' }, 160).text.endsWith('HIGH / AUTO')).toBe(true)
   })
 
   test('90% and over marks the digits critical; below that they stay plain', () => {
-    const row = buildCard({ ...FULL, ctxPercent: 69, limits: [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 70 }] }, 160).rows[0]!
+    const row = buildCard({ ...FULL, ctxPercent: 69, limits: [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 70 }] }, 160).row
     expect(row.find(s => s.text === '93%')?.tone).toBe('critical')
     expect(row.find(s => s.text === '70%')?.tone).toBe('text')
     expect(row.find(s => s.text === '69%')?.tone).toBe('text')
@@ -175,8 +174,8 @@ describe('rail', () => {
     expect(fmtIn(at(0), now)).toBe(null)
     expect(fmtIn('not a date', now)).toBe(null)
     const s = { ...FULL, limits: [{ kind: 'five_hour', percentUsed: 31, resetsAt: at(80 * 60_000) }] }
-    expect(lines(s, 160).text[0]!).not.toContain('↻')
-    expect(rowText(buildCard(s, 160, now).rows[0]!)).toContain('31%  ↻ 1:20')
+    expect(lines(s, 160).text).not.toContain('↻')
+    expect(rowText(buildCard(s, 160, now).row)).toContain('31%  ↻ 1:20')
   })
 
   test('only 5H shows a reset countdown, never 7D', () => {
@@ -189,17 +188,16 @@ describe('rail', () => {
         { kind: 'seven_day', percentUsed: 12, resetsAt: at((3 * 24 + 4) * 3_600_000) },
       ],
     }
-    const t = rowText(buildCard(s, 160, now).rows[0]!)
+    const t = rowText(buildCard(s, 160, now).row)
     expect(t).toContain('31%  ↻ 1:20')
     expect(t).toMatch(/7D ━+  12%  │/)
     expect(t).not.toContain('76:00')
   })
 
-  test('a larger minimum bar drops tokens before the bars get that short', () => {
-    expect(buildCard(FULL, 100).fit.tokens).toBe(true)
-    const card = buildCard(FULL, 100, undefined, { minBar: 8 })
-    expect(card.fit).toEqual({ gap: 1, tokens: false, resets: false, bars: true })
-    expect(rowText(card.rows[0]!)).not.toContain('84.1k')
+  test('flex surfaces drop tokens where the terminal keeps them beside short bars', () => {
+    expect(buildCard(FULL, 95).fit.tokens).toBe(true)
+    const r = rail(FULL, 'desktop', 95)
+    expect(r.surface === 'flex' && r.bars && rowText(r.gauges[0]!.tail)).toBe('')
   })
 })
 
@@ -216,7 +214,7 @@ describe('rail() on a flex surface', () => {
       { kind: 'seven_day', percentUsed: 7, resetsAt: at(3 * 24 * 60 + 240) },
     ],
   }
-  const flex = (input: CardInput, columns: number, surface = 'desktop') => {
+  const flex = (input: CardInput, columns: number, surface: RenderSurface = 'desktop') => {
     const r = rail(input, surface, columns, now)
     if (r.surface !== 'flex') throw new Error(`expected a flex rail, got ${r.surface}`)
     return r
@@ -225,12 +223,12 @@ describe('rail() on a flex surface', () => {
   const terminal = (input: CardInput, columns: number) => {
     const r = rail(input, 'terminal', columns, now)
     if (r.surface !== 'terminal') throw new Error(`expected a terminal rail, got ${r.surface}`)
-    return rowText(r.rows[0]!)
+    return rowText(r.row)
   }
 
-  test('the terminal gets rows; every other surface gets the parts to lay out', () => {
+  test('the terminal gets its row; every other surface gets the parts to lay out', () => {
     expect(rail(S, 'terminal', 120, now).surface).toBe('terminal')
-    for (const surface of ['desktop', 'vscode', 'mobile']) expect(rail(S, surface, 120, now).surface).toBe('flex')
+    for (const surface of ['desktop', 'vscode', 'mobile'] as const) expect(rail(S, surface, 120, now).surface).toBe('flex')
     const r = flex(S, 120)
     expect(r.width).toBe(120)
     expect(r.paddingX).toBe(2)

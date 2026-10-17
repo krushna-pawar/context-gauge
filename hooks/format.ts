@@ -1,20 +1,22 @@
+import type { RenderSurface } from 'claude-code'
+
 import type { Snap } from '../types'
 
 export type Tone = 'text' | 'muted' | 'accent' | 'critical' | 'track'
 export type Seg = { text: string; tone: Tone; bold?: boolean }
 export type Row = Seg[]
 export type CardInput = Snap
-export type Card = { width: number; inner: number; paddingX: number; rows: Row[]; fit: Fit }
+export type Card = { width: number; inner: number; paddingX: number; row: Row; fit: Fit }
 
-const MIN_BAR = 3
 // The least share of a bar any use fills, so 4% never reads as empty.
 const MIN_FILL = 2
 const CRITICAL = 90
 const DASH = '—'
 
-const WINDOWS: [kind: string, label: string][] = [
-  ['five_hour', '5H'],
-  ['seven_day', '7D'],
+// Only the 5-hour window shows its reset: the 7-day one is days off and rarely the question.
+const WINDOWS = [
+  { kind: 'five_hour', label: '5H', countdown: true },
+  { kind: 'seven_day', label: '7D', countdown: false },
 ]
 
 const MODES: Record<string, string> = {
@@ -89,24 +91,32 @@ function clip(row: Row, inner: number): Row {
   return out
 }
 
-// How much of the rail survives as the band narrows, roomiest first.
-// `resets`: the 5H gauge's reset countdown.
+// How much of the rail survives as the band narrows, roomiest first; the last is used even if
+// it doesn't fit. `resets`: the 5H gauge's reset countdown.
 export type Fit = { gap: number; tokens: boolean; resets: boolean; bars: boolean }
-const FITS: Fit[] = [
+
+const TERMINAL_FITS: Fit[] = [
   { gap: 2, tokens: true, resets: true, bars: true },
   { gap: 1, tokens: true, resets: true, bars: true },
   { gap: 1, tokens: false, resets: false, bars: true },
   { gap: 1, tokens: false, resets: false, bars: false },
   { gap: 0, tokens: false, resets: false, bars: false },
 ]
+const TERMINAL_MIN_BAR = 3
 
-// The desktop keeps the 5H countdown a step longer than the token count.
-const DESKTOP_FITS: Fit[] = [
-  FITS[0]!,
-  FITS[1]!,
+// The flex surfaces keep the 5H countdown a step longer than the token count.
+const FLEX_FITS: Fit[] = [
+  { gap: 2, tokens: true, resets: true, bars: true },
+  { gap: 1, tokens: true, resets: true, bars: true },
   { gap: 1, tokens: false, resets: true, bars: true },
-  ...FITS.slice(2),
+  { gap: 1, tokens: false, resets: false, bars: true },
+  { gap: 1, tokens: false, resets: false, bars: false },
+  { gap: 0, tokens: false, resets: false, bars: false },
 ]
+// Their proportional text is narrower than the code font's cells, but their gaps are wider, so
+// what fits is judged on the same cell count. Their bars keep at least this many cells: below
+// that, token counts go first, then the reset countdown.
+const FLEX_MIN_BAR = 6
 
 // `steady`: cells the tail's first segment is padded to, so the bar keeps its length as it grows.
 type Gauge = { label: string; pct: number | null; tail: Row; steady?: number }
@@ -132,10 +142,9 @@ function gauges(s: CardInput, fit: Fit, now?: number): Gauge[] {
   return [
     // The used figure grows from "9.5k" to "84.1k".
     { label: 'CTX', pct: s.ctxPercent, tail: tokens, steady: 6 },
-    ...WINDOWS.map(([kind, label]) => {
+    ...WINDOWS.map(({ kind, label, countdown }) => {
       const limit = s.limits.find(l => l.kind === kind)
-      // Only the 5-hour window shows its reset: the 7-day one is days off and rarely the question.
-      const resets = kind === 'five_hour' && fit.resets && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
+      const resets = countdown && fit.resets && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
       return { label, pct: limit?.percentUsed ?? null, tail: resets === null ? [] : [seg(`↻ ${resets}`, 'muted')] }
     }),
   ]
@@ -164,7 +173,8 @@ const ends = (s: CardInput): { left: Seg; right: Row } => ({
   right: [upper(s.effort), seg(' / ', 'muted'), upper(s.mode === null ? null : fmtMode(s.mode))],
 })
 
-function line(s: CardInput, inner: number, fit: Fit, minBar: number, now?: number, force = false): Row | null {
+// The rail at one fit, and whether it fits `inner` with every bar at least `minBar` cells.
+function line(s: CardInput, inner: number, fit: Fit, minBar: number, now?: number): { row: Row; fits: boolean } {
   const sep = seg(`${' '.repeat(fit.gap)}│${' '.repeat(fit.gap)}`, 'muted')
   const { left, right } = ends(s)
   const gs = gauges(s, fit, now)
@@ -176,61 +186,61 @@ function line(s: CardInput, inner: number, fit: Fit, minBar: number, now?: numbe
   }
 
   if (fit.bars) {
-    const free = inner - rowLength(build([0, 0, 0]))
-    const widths = split(free)
-    if (widths.some(w => w < minBar)) return null
-    return build(widths)
+    const widths = split(inner - rowLength(build([0, 0, 0])))
+    return { row: build(widths), fits: widths.every(w => w >= minBar) }
   }
   const pad = inner - rowLength(build([null, null, null]))
-  if (pad < 0 && !force) return null
+  const spare = Math.max(0, pad)
   const slots = (gs.length + 1) * 2
-  return build([null, null, null], Array.from({ length: slots }, (_, i) => Math.floor(Math.max(0, pad) / slots) + (i < Math.max(0, pad) % slots ? 1 : 0)))
+  return {
+    row: build([null, null, null], Array.from({ length: slots }, (_, i) => Math.floor(spare / slots) + (i < spare % slots ? 1 : 0))),
+    fits: pad >= 0,
+  }
 }
 
-// One full-width line: model │ CTX bar │ 5H bar │ 7D bar │ EFFORT / MODE.
-// `minBar`: the fewest cells a bar may have before the next fit is tried; `fits`: the fits to try.
-export function buildCard(
-  s: CardInput,
-  columns: number,
-  now?: number,
-  { minBar = MIN_BAR, fits = FITS }: { minBar?: number; fits?: Fit[] } = {},
-): Card {
+// The first fit whose rail fits, else the last.
+function pick(s: CardInput, inner: number, fits: Fit[], minBar: number, now?: number): { fit: Fit; row: Row } {
+  const tries = fits.map(fit => ({ fit, ...line(s, inner, fit, minBar, now) }))
+  return tries.find(t => t.fits) ?? tries[tries.length - 1]!
+}
+
+// The card's border box: its width, side padding, and the cells left inside them.
+function frame(columns: number): { width: number; paddingX: number; inner: number } {
   const width = Math.max(columns, 4)
   const paddingX = columns >= 60 ? 2 : 1
-  const inner = width - 2 - paddingX * 2
-  for (const fit of fits) {
-    const row = line(s, inner, fit, minBar, now)
-    if (row) return { width, inner, paddingX, rows: [clip(row, inner)], fit }
-  }
-  const fit = fits[fits.length - 1]!
-  return { width, inner, paddingX, rows: [clip(line(s, inner, fit, minBar, now, true)!, inner)], fit }
+  return { width, paddingX, inner: width - 2 - paddingX * 2 }
 }
 
-// The desktop's proportional text is narrower than the code font's cells, but its gaps are
-// wider, so what fits is judged on bodyColumns as is. Its bars keep at least this many cells:
-// below that, token counts go first, then the reset countdown.
-const DESKTOP_MIN_BAR = 6
+// The terminal's one full-width line: model │ CTX bar │ 5H bar │ 7D bar │ EFFORT / MODE.
+export function buildCard(s: CardInput, columns: number, now?: number): Card {
+  const { width, paddingX, inner } = frame(columns)
+  const { fit, row } = pick(s, inner, TERMINAL_FITS, TERMINAL_MIN_BAR, now)
+  return { width, inner, paddingX, row: clip(row, inner), fit }
+}
 
 export type FlexGauge = { label: Seg; fill: number; pct: Seg; tail: Row }
 
-// What a surface draws. The terminal gets cell-counted rows. Any other surface (desktop,
+// What a surface draws. The terminal gets its cell-counted row. Any other surface (desktop,
 // vscode, mobile) sets text in a proportional font, where cell-counted padding comes up short,
 // so it gets the parts to lay out with flex: `gap` between every two items, the bars taking
 // whatever room is left when `bars`, and each gauge's `fill` in percent.
 export type Rail = { width: number; paddingX: number } & (
-  | { surface: 'terminal'; rows: Row[] }
+  | { surface: 'terminal'; row: Row }
   | { surface: 'flex'; gap: number; bars: boolean; left: Seg; gauges: FlexGauge[]; right: Row }
 )
 
-export function rail(s: CardInput, surface: string, columns: number, now?: number): Rail {
-  const card = buildCard(s, columns, now)
-  const box = { width: card.width, paddingX: card.paddingX }
-  if (surface === 'terminal') return { ...box, surface: 'terminal', rows: card.rows }
-  const { fit } = buildCard(s, columns, now, { minBar: DESKTOP_MIN_BAR, fits: DESKTOP_FITS })
+export function rail(s: CardInput, surface: RenderSurface, columns: number, now?: number): Rail {
+  if (surface === 'terminal') {
+    const { width, paddingX, row } = buildCard(s, columns, now)
+    return { surface, width, paddingX, row }
+  }
+  const { width, paddingX, inner } = frame(columns)
+  const { fit } = pick(s, inner, FLEX_FITS, FLEX_MIN_BAR, now)
   const { left, right } = ends(s)
   return {
-    ...box,
     surface: 'flex',
+    width,
+    paddingX,
     // One gap everywhere, around each │ and inside each gauge alike: the terminal's spaces
     // around each │, but never none.
     gap: Math.max(1, fit.gap),
