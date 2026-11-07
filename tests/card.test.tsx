@@ -60,7 +60,7 @@ describe('band', () => {
     expect(box.props?.borderColor).toBe('claude')
     expect(box.props?.width).toBe(150)
     expect(rows.length).toBe(1)
-    expect(rows[0]!.startsWith('—  │  CTX ')).toBe(true)
+    expect(rows[0]!.startsWith('—  |  CTX ')).toBe(true)
     expect(rows[0]!.endsWith('— / —')).toBe(true)
   })
 
@@ -86,7 +86,7 @@ describe('band', () => {
     const { box, rows } = await draw($, 150, { isWorking: true })
     expect(rows.length).toBe(1)
     expect(rows[0]!.length).toBe(inner(box))
-    expect(rows[0]!).toMatch(/^OPUS 5\.5  │  CTX ━+  42%   84\.1k \/ 200k  │  5H ━+  31%  │  7D ━+  92%  │  HIGH \/ AUTO$/)
+    expect(rows[0]!).toMatch(/^OPUS 5\.5  \|  CTX ━+  42%   84\.1k \/ 200k  \|  5H ━+  31%  \|  7D ━+  92%  \|  HIGH \/ AUTO$/)
     expect(rows[0]!).not.toContain('$')
   })
 
@@ -109,7 +109,7 @@ describe('band', () => {
     await $.session.start({ source: 'clear', cwd: '/work' } as never)
 
     const { rows } = await draw($, 150)
-    expect(rows[0]!).toMatch(/^OPUS 5\.5  │  CTX ━+ +— +— \/ 200k  │  5H ━+  31%  │  7D ━+  92%  │  HIGH \/ PLAN$/)
+    expect(rows[0]!).toMatch(/^OPUS 5\.5  \|  CTX ━+ +— +— \/ 200k  \|  5H ━+  31%  \|  7D ━+  92%  \|  HIGH \/ PLAN$/)
   })
 
   test('settings seed effort and mode before any request or prompt', async ($, on) => {
@@ -185,7 +185,6 @@ describe('band', () => {
     } as never)
     const { box: tree } = await draw($, 150, {}, 'desktop')
     expect(tree.props?.flexDirection).toBe('row')
-    expect(tree.props?.width).toBe(150)
     expect(tree.props?.borderStyle).toBe('round')
     expect(tree.props?.marginTop).toBe(1)
     const text = flat(tree as RenderNode)
@@ -200,7 +199,8 @@ describe('band', () => {
     }
     walk(tree as RenderNode)
     expect(fills).toEqual(['6%', '4%', '40%'])
-    // One gap everywhere, the terminal's spacing around each │, and no fixed-width slots padding text.
+    // One gap everywhere, the terminal's spacing around each separator, and no fixed-width slots
+    // padding text.
     const gaps = new Set<unknown>()
     const slots: unknown[] = []
     const walkGaps = (n: RenderNode) => {
@@ -213,13 +213,34 @@ describe('band', () => {
     walkGaps(tree as RenderNode)
     expect([...gaps]).toEqual([2])
     expect(slots.filter(w => w !== 0)).toEqual([])
+    // A part made of several spans is one Text, so the spaces in " / " survive a flex layout.
+    const texts: string[] = []
+    const walkTexts = (n: RenderNode) => {
+      if (typeof n === 'string' || !n) return
+      const el = n as { type?: string; children?: RenderNode[] }
+      if (el.type === 'Text') return void texts.push(flat(n))
+      ;(el.children ?? []).forEach(walkTexts)
+    }
+    walkTexts(tree as RenderNode)
+    expect(texts).toContain('60.9k / 1.0M')
+    expect(texts).toContain('MEDIUM / AUTO')
   })
 
-  test('desktop: narrow widths still draw one row', async ($, on) => {
+  test('desktop and vscode: one row, or two on a narrow pane, every value in it, never a fixed width', async ($, on) => {
     engine(on)
-    for (const columns of [200, 64, 32]) {
-      const { box } = await draw($, columns, {}, 'desktop')
-      expect(box.props?.flexDirection).toBe('row')
+    for (const surface of ['desktop', 'vscode'] as const) {
+      for (const columns of [200, 64, 36, 24]) {
+        const { box } = await draw($, columns, {}, surface as 'desktop')
+        // The card picks its rows: the desktop's own wrapping broke lines with room to spare.
+        expect(box.props?.flexDirection).toBe(columns < 44 ? 'column' : 'row')
+        expect(box.props?.flexWrap).toBeUndefined()
+        // bodyColumns are the code font's cells: VS Code counted 36 across a 490px panel.
+        expect(box.props?.width).toBeUndefined()
+        expect(box.props?.marginTop).toBe(1)
+        const text = flat(box as RenderNode)
+        for (const part of ['CTX', '5H', '7D', '— / —']) expect(text).toContain(part)
+        expect(text.startsWith('—')).toBe(true)
+      }
     }
   })
 
@@ -253,7 +274,7 @@ describe('band', () => {
     } as never)
     let row = (await draw($, 160)).rows[0]!
     expect(row).toMatch(/5H ━+  62%  ↻ 1:20/)
-    expect(row).toMatch(/7D ━+  12%  │/)
+    expect(row).toMatch(/7D ━+  12%  \|/)
     expect(row).not.toContain('76:00')
     const desktop = flat((await draw($, 160, {}, 'desktop')).box as RenderNode)
     expect(desktop).toContain('↻ 1:20')

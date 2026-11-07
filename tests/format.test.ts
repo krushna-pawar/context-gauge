@@ -91,7 +91,7 @@ describe('rail', () => {
     const { card, text } = lines(FULL, 160)
     expect(card.width).toBe(160)
     expect(text.length).toBe(card.inner)
-    expect(text).toMatch(/^OPUS 5\.5  │  CTX ━+  42%   84\.1k \/ 200k  │  5H ━+  31%  │  7D ━+  12%  │  HIGH \/ DEFAULT$/)
+    expect(text).toMatch(/^OPUS 5\.5  \|  CTX ━+  42%   84\.1k \/ 200k  \|  5H ━+  31%  \|  7D ━+  12%  \|  HIGH \/ DEFAULT$/)
   })
 
   test('every filled bar is accent, never another tone', () => {
@@ -114,12 +114,33 @@ describe('rail', () => {
     expect(bars[0]! > bars[2]!).toBe(true)
   })
 
-  test('fills the inner width exactly, never wider, at any width', () => {
+  test('never wider than the inner width; bars fill it exactly, and without them less than a gap per separator is left', () => {
     for (const columns of [240, 160, 120, 100, 80, 76, 64, 52, 44, 36, 32, 24]) {
       const { card, text } = lines(FULL, columns)
       expect(text.length <= card.inner).toBe(true)
-      if (columns >= 52) expect(text.length).toBe(card.inner)
+      if (card.fit.bars) expect(text.length).toBe(card.inner)
+      // Four separators, each widened on both sides alike: at most 7 cells can't be shared out.
+      else if (columns >= 52) expect(card.inner - text.length < 8).toBe(true)
     }
+  })
+
+  test('separators are ASCII: a box-drawing │ spills below its cell and leaves dots in Terminal.app', () => {
+    for (const columns of [200, 100, 64, 48]) expect(lines(FULL, columns).text).not.toMatch(/[│┃]/)
+  })
+
+  test('without bars, every separator is spaced the same', () => {
+    for (let columns = 40; columns <= 80; columns++) {
+      const { card, text } = lines(FULL, columns)
+      if (card.fit.bars) continue
+      expect(new Set(text.match(/ *\| */g)).size).toBe(1)
+    }
+  })
+
+  test('without bars, a full gauge still has a space after its label', () => {
+    const t = lines({ ...FULL, ctxPercent: 100, limits: [{ kind: 'five_hour', percentUsed: 100 }] }, 64).text
+    expect(t).toContain('CTX 100%')
+    expect(t).toContain('5H 100%')
+    expect(lines(FULL, 64).text).toContain('CTX 42%')
   })
 
   test('narrowing drops token counts, then bars, keeping percentages and the right block', () => {
@@ -136,7 +157,7 @@ describe('rail', () => {
 
   test('missing data shows a dash, never a guess', () => {
     const { text } = lines(EMPTY, 160)
-    expect(text.startsWith('—  │  CTX ')).toBe(true)
+    expect(text.startsWith('—  |  CTX ')).toBe(true)
     expect(text).toContain('— / —')
     expect(text).not.toContain('%')
     expect(text.endsWith('— / —')).toBe(true)
@@ -149,7 +170,7 @@ describe('rail', () => {
 
   test('no subscription windows: 5H and 7D show a dash', () => {
     const t = lines({ ...FULL, limits: [{ kind: 'spend_limit', percentUsed: 50 }] }, 160).text
-    expect(t).toMatch(/5H ━+ +—  │  7D ━+ +—  │/)
+    expect(t).toMatch(/5H ━+ +—  \|  7D ━+ +—  \|/)
   })
 
   test('mode names are shown as words, upper-cased', () => {
@@ -190,14 +211,14 @@ describe('rail', () => {
     }
     const t = rowText(buildCard(s, 160, now).row)
     expect(t).toContain('31%  ↻ 1:20')
-    expect(t).toMatch(/7D ━+  12%  │/)
+    expect(t).toMatch(/7D ━+  12%  \|/)
     expect(t).not.toContain('76:00')
   })
 
   test('flex surfaces drop tokens where the terminal keeps them beside short bars', () => {
     expect(buildCard(FULL, 95).fit.tokens).toBe(true)
     const r = rail(FULL, 'desktop', 95)
-    expect(r.surface === 'flex' && r.bars && rowText(r.gauges[0]!.tail)).toBe('')
+    expect(r.surface === 'flex' && rowText(r.gauges[0]!.tail)).toBe('')
   })
 })
 
@@ -230,7 +251,6 @@ describe('rail() on a flex surface', () => {
     expect(rail(S, 'terminal', 120, now).surface).toBe('terminal')
     for (const surface of ['desktop', 'vscode', 'mobile'] as const) expect(rail(S, surface, 120, now).surface).toBe('flex')
     const r = flex(S, 120)
-    expect(r.width).toBe(120)
     expect(r.paddingX).toBe(2)
     expect(r.gauges.map(g => g.label.text)).toEqual(['CTX', '5H', '7D'])
     expect(r.gauges.map(g => g.pct.text)).toEqual(['8%', '34%', '7%'])
@@ -245,24 +265,59 @@ describe('rail() on a flex surface', () => {
   test('one gap everywhere: the terminal spacing, never none', () => {
     expect(flex(S, 160).gap).toBe(2)
     expect(flex(S, 90).gap).toBe(1)
-    expect(flex(S, 24).gap).toBe(1)
+    expect(flex(S, 64).gap).toBe(1)
+  })
+
+  // Columns are the code font's, so they never decide which gauges a flex surface gets: at 43
+  // the desktop had room for 7D with a third of the card empty, and it was hidden.
+  test('every gauge and both ends at any width: what fits is the surface layout\'s call', () => {
+    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
+      for (const columns of [400, 160, 90, 64, 50, 43, 24, 4]) {
+        const r = rail(FULL, surface, columns, now)
+        expect(r.surface).toBe('flex')
+        if (r.surface !== 'flex') continue
+        expect(r.gauges.map(g => g.label.text)).toEqual(['CTX', '5H', '7D'])
+        expect(r.left.text).toBe('OPUS 5.5')
+        expect(rowText(r.right)).toBe('HIGH / DEFAULT')
+      }
+    }
+  })
+
+  test('a flex surface keeps its bars unless its columns say it is narrow, and then stacks', () => {
+    expect(flex(FULL, 120).bars).toBe(true)
+    expect(flex(FULL, 120).stacked).toBe(false)
+    // A 700px desktop card counted 64.
+    expect(flex(FULL, 64).bars).toBe(true)
+    expect(flex(FULL, 64).stacked).toBe(false)
+    expect(flex(FULL, 30).stacked).toBe(true)
+    expect(flex(FULL, 30).bars).toBe(false)
+    expect(flex(FULL, 30).gauges.length).toBe(3)
+  })
+
+  // Seen in VS Code's terminal, 32 columns wide: `OPUS 5.5|CTX  —|5H 68%|7D 1…`.
+  test('a narrow terminal drops the spaces, then 7D, then shortens the effort, then drops 5H, before … cuts anything', () => {
+    const m: CardInput = { ...FULL, effort: 'medium', mode: 'auto' }
+    const narrow = (columns: number) => rowText(buildCard(m, columns, now).row)
+    expect(narrow(48)).toBe('OPUS 5.5|CTX 42%|5H 31%|7D 12%|MEDIUM / AUTO')
+    expect(narrow(41)).toBe('OPUS 5.5|CTX 42%|5H 31%|MEDIUM / AUTO')
+    expect(narrow(38)).toBe('OPUS 5.5|CTX 42%|5H 31%|MED / AUTO')
+    expect(narrow(31)).toBe('OPUS 5.5|CTX 42%|MED / AUTO')
+    expect(narrow(20).endsWith('…')).toBe(true)
+    for (let columns = 8; columns <= 60; columns++) expect(narrow(columns).length <= buildCard(m, columns, now).inner).toBe(true)
   })
 
   test('drops tokens, then the reset time, before its bars get short', () => {
     const wide = flex(S, 130)
-    expect(wide.bars).toBe(true)
     expect(tails(wide)).toEqual(['84.1k / 1.0M', '↻ 1:20', ''])
 
     // Where the terminal would still squeeze tokens in beside short bars, the desktop gives them up
     // but keeps the 5H countdown, which the terminal drops along with the tokens.
     expect(terminal(S, 90)).toContain('84.1k')
     const mid = flex(S, 90)
-    expect(mid.bars).toBe(true)
     expect(tails(mid)).toEqual(['', '↻ 1:20', ''])
     expect(terminal(S, 80)).not.toContain('↻')
 
     const narrow = flex(S, 74)
-    expect(narrow.bars).toBe(true)
     expect(tails(narrow)).toEqual(['', '', ''])
   })
 })

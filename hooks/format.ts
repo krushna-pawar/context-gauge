@@ -12,6 +12,9 @@ export type Card = { width: number; inner: number; paddingX: number; row: Row; f
 const MIN_FILL = 2
 const CRITICAL = 90
 const DASH = '—'
+// ASCII, not the box-drawing │: Terminal.app's SF Mono draws │ 2pt below its cell, and once it
+// moves, that sliver stays on the unchanged border row beneath as a stray dot until ctrl+L.
+const SEP = '|'
 
 // Only the 5-hour window shows its reset: the 7-day one is days off and rarely the question.
 const WINDOWS = [
@@ -92,8 +95,9 @@ function clip(row: Row, inner: number): Row {
 }
 
 // How much of the rail survives as the band narrows, roomiest first; the last is used even if
-// it doesn't fit. `resets`: the 5H gauge's reset countdown.
-export type Fit = { gap: number; tokens: boolean; resets: boolean; bars: boolean }
+// it doesn't fit. `resets`: the 5H gauge's reset countdown. `gauges`: how many to keep, of all
+// three unless given. `shortEffort` writes MEDIUM as MED.
+export type Fit = { gap: number; tokens: boolean; resets: boolean; bars: boolean; gauges?: number; shortEffort?: boolean }
 
 const TERMINAL_FITS: Fit[] = [
   { gap: 2, tokens: true, resets: true, bars: true },
@@ -101,22 +105,36 @@ const TERMINAL_FITS: Fit[] = [
   { gap: 1, tokens: false, resets: false, bars: true },
   { gap: 1, tokens: false, resets: false, bars: false },
   { gap: 0, tokens: false, resets: false, bars: false },
+  // Too narrow for every gauge: EFFORT / MODE outlasts 7D, whose reading … would have cut anyway.
+  { gap: 0, tokens: false, resets: false, bars: false, gauges: 2 },
+  { gap: 0, tokens: false, resets: false, bars: false, gauges: 2, shortEffort: true },
+  { gap: 0, tokens: false, resets: false, bars: false, gauges: 1, shortEffort: true },
 ]
 const TERMINAL_MIN_BAR = 3
 
-// The flex surfaces keep the 5H countdown a step longer than the token count.
+// The flex surfaces keep the 5H countdown a step longer than the token count. They draw at least
+// one gap, so they never try none.
 const FLEX_FITS: Fit[] = [
   { gap: 2, tokens: true, resets: true, bars: true },
   { gap: 1, tokens: true, resets: true, bars: true },
   { gap: 1, tokens: false, resets: true, bars: true },
   { gap: 1, tokens: false, resets: false, bars: true },
   { gap: 1, tokens: false, resets: false, bars: false },
-  { gap: 0, tokens: false, resets: false, bars: false },
 ]
-// Their proportional text is narrower than the code font's cells, but their gaps are wider, so
-// what fits is judged on the same cell count. Their bars keep at least this many cells: below
-// that, token counts go first, then the reset countdown.
+// A flex surface's columns say little of its room: VS Code's panel counted 36 across about
+// 490px, where proportional text fits twice that. So they choose only the extras, tokens, the
+// countdown and the bars, and a wrong choice costs at most a wrapped line or bars left out.
+// Everything else is laid out by the surface itself.
 const FLEX_MIN_BAR = 6
+// Bars stay from this many cells inside the card, even where the counted text leaves them none:
+// desktop counted a 700px card as 64 cells, VS Code a 490px panel as 36, both with room for bars.
+// The surface draws a bar no shorter than 4 cells and wraps a line that can't hold it. Narrower,
+// as VS Code's sidebar, the gauges go without.
+const FLEX_BARS_FROM = 30
+// Under this many cells inside the card, a flex surface stacks: model and EFFORT / MODE on one
+// row, the gauges on the next. The desktop's own wrapping broke a line with room to spare, so
+// the card picks its rows itself. A 310px desktop card counted about 28.
+const FLEX_ROW_FROM = 40
 
 // `steady`: cells the tail's first segment is padded to, so the bar keeps its length as it grows.
 type Gauge = { label: string; pct: number | null; tail: Row; steady?: number }
@@ -147,13 +165,14 @@ function gauges(s: CardInput, fit: Fit, now?: number): Gauge[] {
       const resets = countdown && fit.resets && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
       return { label, pct: limit?.percentUsed ?? null, tail: resets === null ? [] : [seg(`↻ ${resets}`, 'muted')] }
     }),
-  ]
+  ].slice(0, fit.gauges)
 }
 
+// Without a bar the percentage sits one space past the label, so "100%" never runs into it.
 const gauge = (g: Gauge, width: number | null): Row => [
   seg(g.label, 'muted'),
-  ...(width === null ? [] : [spaces(1), ...bar(g.pct, width), spaces(1)]),
-  ...percent(g.pct),
+  spaces(1),
+  ...(width === null ? percent(g.pct, 3) : [...bar(g.pct, width), spaces(1), ...percent(g.pct)]),
   ...(g.tail.length ? [spaces(2 + Math.max(0, (g.steady ?? 0) - g.tail[0]!.text.length)), ...g.tail] : []),
 ]
 
@@ -168,34 +187,33 @@ const upper = (v: string | null): Seg =>
   v === null ? seg(DASH, 'muted') : { text: v.toUpperCase(), tone: 'accent', bold: true }
 
 // The rail's two ends: the model, and EFFORT / MODE.
-const ends = (s: CardInput): { left: Seg; right: Row } => ({
+const SHORT_EFFORT: Record<string, string> = { medium: 'med', xhigh: 'xhi' }
+
+const ends = (s: CardInput, short = false): { left: Seg; right: Row } => ({
   left: s.model === null ? seg(DASH, 'muted') : { text: fmtModel(s.model).toUpperCase(), tone: 'text', bold: true },
-  right: [upper(s.effort), seg(' / ', 'muted'), upper(s.mode === null ? null : fmtMode(s.mode))],
+  right: [upper(short && s.effort !== null ? (SHORT_EFFORT[s.effort] ?? s.effort) : s.effort), seg(' / ', 'muted'), upper(s.mode === null ? null : fmtMode(s.mode))],
 })
 
 // The rail at one fit, and whether it fits `inner` with every bar at least `minBar` cells.
 function line(s: CardInput, inner: number, fit: Fit, minBar: number, now?: number): { row: Row; fits: boolean } {
-  const sep = seg(`${' '.repeat(fit.gap)}│${' '.repeat(fit.gap)}`, 'muted')
-  const { left, right } = ends(s)
+  const { left, right } = ends(s, fit.shortEffort)
   const gs = gauges(s, fit, now)
 
-  // `pads` widens each separator's two sides, so leftover cells spread evenly rather than pool.
-  const build = (widths: (number | null)[], pads: number[] = []): Row => {
-    const sepAt = (i: number) => [spaces(pads[2 * i] ?? 0), sep, spaces(pads[2 * i + 1] ?? 0)]
-    return [left, ...gs.flatMap((g, i) => [...sepAt(i), ...gauge(g, widths[i] ?? null)]), ...sepAt(gs.length), ...right]
+  // `pad` widens both sides of every separator alike.
+  const build = (widths: (number | null)[], pad = 0): Row => {
+    const sep = seg(`${' '.repeat(fit.gap + pad)}${SEP}${' '.repeat(fit.gap + pad)}`, 'muted')
+    return [left, ...gs.flatMap((g, i) => [sep, ...gauge(g, widths[i] ?? null)]), sep, ...right]
   }
 
   if (fit.bars) {
     const widths = split(inner - rowLength(build([0, 0, 0])))
     return { row: build(widths), fits: widths.every(w => w >= minBar) }
   }
-  const pad = inner - rowLength(build([null, null, null]))
-  const spare = Math.max(0, pad)
-  const slots = (gs.length + 1) * 2
-  return {
-    row: build([null, null, null], Array.from({ length: slots }, (_, i) => Math.floor(spare / slots) + (i < spare % slots ? 1 : 0))),
-    fits: pad >= 0,
-  }
+  // No bars: leftover cells widen every separator by the same amount, so the gaps stay even;
+  // the few that can't be shared out evenly stay at the end.
+  const spare = inner - rowLength(build([null, null, null]))
+  const pad = spare > 0 ? Math.floor(spare / (2 * (gs.length + 1))) : 0
+  return { row: build([null, null, null], pad), fits: spare >= 0 }
 }
 
 // The first fit whose rail fits, else the last.
@@ -211,7 +229,7 @@ function frame(columns: number): { width: number; paddingX: number; inner: numbe
   return { width, paddingX, inner: width - 2 - paddingX * 2 }
 }
 
-// The terminal's one full-width line: model │ CTX bar │ 5H bar │ 7D bar │ EFFORT / MODE.
+// The terminal's one full-width line: model | CTX bar | 5H bar | 7D bar | EFFORT / MODE.
 export function buildCard(s: CardInput, columns: number, now?: number): Card {
   const { width, paddingX, inner } = frame(columns)
   const { fit, row } = pick(s, inner, TERMINAL_FITS, TERMINAL_MIN_BAR, now)
@@ -220,13 +238,13 @@ export function buildCard(s: CardInput, columns: number, now?: number): Card {
 
 export type FlexGauge = { label: Seg; fill: number; pct: Seg; tail: Row }
 
-// What a surface draws. The terminal gets its cell-counted row. Any other surface (desktop,
-// vscode, mobile) sets text in a proportional font, where cell-counted padding comes up short,
-// so it gets the parts to lay out with flex: `gap` between every two items, the bars taking
-// whatever room is left when `bars`, and each gauge's `fill` in percent.
-export type Rail = { width: number; paddingX: number } & (
-  | { surface: 'terminal'; row: Row }
-  | { surface: 'flex'; gap: number; bars: boolean; left: Seg; gauges: FlexGauge[]; right: Row }
+// What a surface draws. The terminal gets its cell-counted row, `width` cells wide. Any other
+// surface (desktop, vscode, mobile) sets text in a proportional font, where counted cells say
+// little, so it gets the parts to lay out with flex at its full width: `gap` between every two
+// items, the bars taking whatever room is left when `bars`, and each gauge's `fill` in percent.
+export type Rail = { paddingX: number } & (
+  | { surface: 'terminal'; width: number; row: Row }
+  | { surface: 'flex'; gap: number; bars: boolean; stacked: boolean; left: Seg; gauges: FlexGauge[]; right: Row }
 )
 
 export function rail(s: CardInput, surface: RenderSurface, columns: number, now?: number): Rail {
@@ -234,17 +252,19 @@ export function rail(s: CardInput, surface: RenderSurface, columns: number, now?
     const { width, paddingX, row } = buildCard(s, columns, now)
     return { surface, width, paddingX, row }
   }
-  const { width, paddingX, inner } = frame(columns)
-  const { fit } = pick(s, inner, FLEX_FITS, FLEX_MIN_BAR, now)
+  const { paddingX, inner } = frame(columns)
+  const picked = pick(s, inner, FLEX_FITS, FLEX_MIN_BAR, now).fit
+  const stacked = inner < FLEX_ROW_FROM
+  const fit = { ...picked, bars: !stacked && (picked.bars || inner >= FLEX_BARS_FROM) }
   const { left, right } = ends(s)
   return {
     surface: 'flex',
-    width,
     paddingX,
-    // One gap everywhere, around each │ and inside each gauge alike: the terminal's spaces
-    // around each │, but never none.
-    gap: Math.max(1, fit.gap),
+    // One gap everywhere, around each separator and inside each gauge alike: the terminal's
+    // spaces around each separator, but never none.
+    gap: fit.gap,
     bars: fit.bars,
+    stacked,
     left,
     gauges: gauges(s, fit, now).map(g => ({ label: seg(g.label, 'muted'), fill: fillPct(g.pct), pct: pctSeg(g.pct), tail: g.tail })),
     right,

@@ -3,7 +3,8 @@
 - **Card**: the bordered one-line band above the prompt.
 - **Rail**: what the card shows at a given width, decided once by `rail()` in `hooks/format.ts`:
   for the terminal, cell-counted rows; for every other surface (desktop, vscode, mobile), a
-  **flex** rail of parts that `hooks/register.tsx` lays out without deciding anything.
+  **flex** rail of parts that `hooks/register.tsx` lays out at the pane's full width, leaving the
+  surface's own layout to share out the room: one row, or two on a narrow pane.
 - **Ends**: the rail's two outer items, the model on the left and `EFFORT / MODE` on the right.
 - **Gauge**: one of CTX, 5H and 7D: a label, a bar, a percentage and an optional tail.
 - **Fill**: how much of a gauge's bar is filled, in percent (at least 2% for any use).

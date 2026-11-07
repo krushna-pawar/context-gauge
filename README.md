@@ -24,16 +24,22 @@ reads on light themes as well as dark ones.
 ## Narrow windows
 
 The card always stays on one line. As the window narrows it drops the token count and reset
-time first, then the bars, and keeps the percentages, effort and mode:
+time first, then the bars, then the spaces around each `|`, and keeps the percentages, effort and
+mode. Every `|` is always spaced the same:
 
 ```
-OPUS 5.5  │  CTX ━━━━━━━━━━━━━━━   5%   48.1k / 1.0M  │  5H ━━━━━━━━━━━  62%  ↻ 1:20  │  7D ━━━━━━━━━━━  45%  │  HIGH / AUTO
-OPUS 5.5 │ CTX ━━━━━━━━━━━━━━━   5% │ 5H ━━━━━━━━━━━  62% │ 7D ━━━━━━━━━━━━  45% │ HIGH / AUTO
-OPUS 5.5 │ CTX ━━━━━━━   5% │ 5H ━━━━━  62% │ 7D ━━━━━━  45% │ HIGH / AUTO
-OPUS 5.5  │  CTX  5%  │  5H 62% │ 7D 45% │ HIGH / AUTO
+OPUS 5.5  |  CTX ━━━━━━━━━━━━━━━   5%   48.1k / 1.0M  |  5H ━━━━━━━━━━━  62%  ↻ 1:20  |  7D ━━━━━━━━━━━  45%  |  HIGH / AUTO
+OPUS 5.5 | CTX ━━━━━━━━━   5% | 5H ━━━━━━  62% | 7D ━━━━━━━  45% | HIGH / AUTO
+OPUS 5.5  |  CTX  5%  |  5H 62%  |  7D 45%  |  HIGH / AUTO
+OPUS 5.5|CTX  5%|5H 62%|7D 45%|HIGH / AUTO
 ```
 
-In the desktop app the same row is laid out to fit the window's font, with thin bars.
+Narrower still, 7D goes, then the effort shortens (MEDIUM to MED), then 5H goes. Only then is the
+row cut short with `…`.
+
+In the desktop app and the VS Code panel the card fills the width, with thin bars taking the spare
+room. On a narrow pane, as in VS Code's sidebar or a small window, it takes two rows: the model and
+effort / mode, then the gauges without bars.
 
 ## Known limits
 
