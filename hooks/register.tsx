@@ -2,9 +2,9 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage, Timer } from 'claude-code'
 
 import type { Snap } from '../types'
-import { rail, type Row, type Seg, type Tone } from './format'
+import { footer, rail, type Row, type Seg, type Tone } from './format'
 
-// Theme keys, not fixed colors, so the card reads on light themes as well as dark ones.
+// Theme keys, not fixed colors, so the gauges read on light themes as well as dark ones.
 const COLORS: Record<Tone, string> = {
   text: 'text',
   muted: 'inactive',
@@ -17,6 +17,12 @@ const BORDER = 'claude'
 const BAR_HEIGHT = 0.25
 // The shortest bar worth drawing, in cells: shorter reads as a dot.
 const BAR_MIN = 4
+// The terminal's footer shares its row with Claude Code's own hint at the left, whose length the
+// engine does not report: this many cells are left for it. Where its hint is longer, the engine
+// shortens the hint itself.
+const FOOTER_RESERVE = 42
+// The columns assumed where the terminal has not measured yet.
+const FOOTER_COLUMNS = 80
 
 const EMPTY: Snap = {
   model: null,
@@ -126,12 +132,35 @@ export const register: Register = on => {
   on('classic.PostToolUse', async ($, e, next) => (await noteMode($, e), next(e)))
   on('classic.Stop', async ($, e, next) => (await noteMode($, e), next(e)))
 
+  // The terminal draws the gauges at the right of the row under the prompt, after any mode
+  // labels the engine has there (`focus`, `memory paused`); every other surface keeps the card.
+  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    if (e.surface !== 'terminal') return next(e)
+
+    const { Text } = $.ui.resolve(e)
+    const s = await read($, snap)
+    const modes = e.props.modes.join(' & ')
+    const room = (e.viewport?.columns ?? FOOTER_COLUMNS) - FOOTER_RESERVE - (modes ? modes.length + 3 : 0)
+    const row = footer({ ...EMPTY, ...s }, room, await $.clock.now())
+    if (!row.length) return next(e)
+    return (
+      <Text wrap="truncate-end">
+        {row.map((part, j) => (
+          <Text key={String(j)} color={COLORS[part.tone]} bold={part.bold} inverse={part.chip}>
+            {part.text}
+          </Text>
+        ))}
+        {modes ? <Text color={COLORS.muted}>{` · ${modes}`}</Text> : null}
+      </Text>
+    )
+  })
+
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.props.hasSurvey) return next(e)
+    if (e.props.hasSurvey || e.surface === 'terminal') return next(e)
 
     const { Box, Text } = $.ui.resolve(e)
     const s = await read($, snap)
-    const r = rail({ ...EMPTY, ...s }, e.surface, e.props.bodyColumns, await $.clock.now())
+    const r = rail({ ...EMPTY, ...s }, e.props.bodyColumns, await $.clock.now())
     const box = { borderStyle: 'round', borderColor: BORDER, paddingX: r.paddingX } as const
     const span = (part: Seg, key?: string) => (
       <Text key={key} color={COLORS[part.tone]} bold={part.bold}>
@@ -139,69 +168,61 @@ export const register: Register = on => {
       </Text>
     )
     // One Text around the spans: as flex items of their own, the spaces at their ends (" / ") are dropped.
-    const spans = (row: Row, wrap?: 'truncate-end') => <Text wrap={wrap}>{row.map((p, j) => span(p, String(j)))}</Text>
+    const spans = (row: Row) => <Text>{row.map((p, j) => span(p, String(j)))}</Text>
 
-    if (r.surface === 'flex') {
-      // The card picks its rows itself: the desktop's own wrapping broke a line with room to
-      // spare. One row that never wraps, or, on a narrow pane, two: model and EFFORT / MODE,
-      // then the gauges. No width: bodyColumns are the code font's cells, and VS Code counted
-      // 36 across a 490px panel.
-      const sep = <Text color={COLORS.muted}>│</Text>
-      const gauges = r.gauges.map((g, i) => (
-        <Box flexGrow={1} flexShrink={1} minWidth={0} flexDirection="row" alignItems="center" columnGap={r.gap}>
-          {i > 0 ? sep : null}
-          {/* Centered: without bars, the room left over sits evenly either side of each │. */}
-          <Box flexGrow={1} flexShrink={1} minWidth={0} flexDirection="row" alignItems="center" justifyContent="center" columnGap={r.gap}>
-            <Box flexShrink={0}>{span(g.label)}</Box>
-            {r.bars ? (
-              // A thin strip, not a run of ━: the desktop sets glyphs in a proportional font.
-              // It takes the room left, never less than BAR_MIN, so never a dot. (Hiding a bar
-              // too short to show, by wrapping it out of sight, drew none at all on the desktop.)
-              <Box flexGrow={1} width={0} minWidth={BAR_MIN} height={1} alignItems="center">
-                <Box flexGrow={1} height={BAR_HEIGHT} backgroundColor={COLORS.track} flexDirection="row" overflow="hidden">
-                  {g.fill > 0 ? (
-                    <Box width={`${g.fill}%`} height="100%" backgroundColor={COLORS.accent} />
-                  ) : null}
-                </Box>
+    // The card picks its rows itself: the desktop's own wrapping broke a line with room to
+    // spare. One row that never wraps, or, on a narrow pane, two: model and EFFORT / MODE,
+    // then the gauges. No width: bodyColumns are the code font's cells, and VS Code counted
+    // 36 across a 490px panel.
+    const sep = <Text color={COLORS.muted}>│</Text>
+    const gauges = r.gauges.map((g, i) => (
+      <Box flexGrow={1} flexShrink={1} minWidth={0} flexDirection="row" alignItems="center" columnGap={r.gap}>
+        {i > 0 ? sep : null}
+        {/* Centered: without bars, the room left over sits evenly either side of each │. */}
+        <Box flexGrow={1} flexShrink={1} minWidth={0} flexDirection="row" alignItems="center" justifyContent="center" columnGap={r.gap}>
+          <Box flexShrink={0}>{span(g.label)}</Box>
+          {r.bars ? (
+            // A thin strip, not a run of ━: the desktop sets glyphs in a proportional font.
+            // It takes the room left, never less than BAR_MIN, so never a dot. (Hiding a bar
+            // too short to show, by wrapping it out of sight, drew none at all on the desktop.)
+            <Box flexGrow={1} width={0} minWidth={BAR_MIN} height={1} alignItems="center">
+              <Box flexGrow={1} height={BAR_HEIGHT} backgroundColor={COLORS.track} flexDirection="row" overflow="hidden">
+                {g.fill > 0 ? (
+                  <Box width={`${g.fill}%`} height="100%" backgroundColor={COLORS.accent} />
+                ) : null}
               </Box>
-            ) : null}
-            <Box flexShrink={0}>{span(g.pct)}</Box>
-            {g.tail.length ? <Box flexShrink={0}>{spans(g.tail)}</Box> : null}
-          </Box>
+            </Box>
+          ) : null}
+          <Box flexShrink={0}>{span(g.pct)}</Box>
+          {g.tail.length ? <Box flexShrink={0}>{spans(g.tail)}</Box> : null}
         </Box>
-      ))
-      const left = <Box flexShrink={0}>{span(r.left)}</Box>
-      const right = <Box flexShrink={0}>{spans(r.right)}</Box>
-      // marginTop: air between the card and any row drawn above it.
-      if (r.stacked) {
-        return (
-          <Box {...box} marginTop={1} flexDirection="column">
-            <Box flexDirection="row" justifyContent="space-between" columnGap={r.gap}>
-              {left}
-              {right}
-            </Box>
-            <Box flexDirection="row" alignItems="center" columnGap={r.gap}>
-              {gauges}
-            </Box>
-          </Box>
-        )
-      }
+      </Box>
+    ))
+    const left = <Box flexShrink={0}>{span(r.left)}</Box>
+    const right = <Box flexShrink={0}>{spans(r.right)}</Box>
+    // marginTop: air between the card and any row drawn above it.
+    if (r.stacked) {
       return (
-        <Box {...box} marginTop={1} flexDirection="row" alignItems="center" columnGap={r.gap}>
-          {left}
-          {sep}
-          <Box flexGrow={1} flexShrink={1} minWidth={0} flexDirection="row" alignItems="center" columnGap={r.gap}>
+        <Box {...box} marginTop={1} flexDirection="column">
+          <Box flexDirection="row" justifyContent="space-between" columnGap={r.gap}>
+            {left}
+            {right}
+          </Box>
+          <Box flexDirection="row" alignItems="center" columnGap={r.gap}>
             {gauges}
           </Box>
-          {sep}
-          {right}
         </Box>
       )
     }
-
     return (
-      <Box flexDirection="column" {...box} width={r.width}>
-        {spans(r.row, 'truncate-end')}
+      <Box {...box} marginTop={1} flexDirection="row" alignItems="center" columnGap={r.gap}>
+        {left}
+        {sep}
+        <Box flexGrow={1} flexShrink={1} minWidth={0} flexDirection="row" alignItems="center" columnGap={r.gap}>
+          {gauges}
+        </Box>
+        {sep}
+        {right}
       </Box>
     )
   })

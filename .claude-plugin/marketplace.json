@@ -9,5 +9,5 @@
       "source": "./"
     }
   ],
-  "description": "A one-line card above the Claude Code prompt: model, context window, 5h/7d usage, effort and mode."
+  "description": "Model, context window, 5h/7d usage and effort beside the Claude Code prompt: one line under it in the terminal, a card above it on the desktop."
 }

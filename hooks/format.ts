@@ -1,19 +1,16 @@
-import type { RenderSurface } from 'claude-code'
-
 import type { Snap } from '../types'
 
 export type Tone = 'text' | 'muted' | 'accent' | 'critical' | 'track'
-export type Seg = { text: string; tone: Tone; bold?: boolean }
+// `chip`: drawn inverse, the tone as its background.
+export type Seg = { text: string; tone: Tone; bold?: boolean; chip?: boolean }
 export type Row = Seg[]
 export type CardInput = Snap
-export type Card = { width: number; inner: number; paddingX: number; row: Row; fit: Fit }
 
 // The least share of a bar any use fills, so 4% never reads as empty.
 const MIN_FILL = 2
 const CRITICAL = 90
 const DASH = '—'
-// ASCII, not the box-drawing │: Terminal.app's SF Mono draws │ 2pt below its cell, and once it
-// moves, that sliver stays on the unchanged border row beneath as a stray dot until ctrl+L.
+// One cell between gauges where the rail is measured in cells to pick the card's fit.
 const SEP = '|'
 
 // Only the 5-hour window shows its reset: the 7-day one is days off and rarely the question.
@@ -55,14 +52,14 @@ export const fmtMode = (mode: string | null) => (mode === null ? DASH : (MODES[m
 // How much of a bar to fill, in percent: none for no use, at least MIN_FILL for any.
 const fillPct = (pct: number | null) => (pct === null || pct <= 0 ? 0 : Math.min(100, Math.max(MIN_FILL, pct)))
 
-// Filled cells in Claude orange, the rest a dark track, whatever the percentage.
-export function bar(pct: number | null, width: number): Seg[] {
+// Filled cells in Claude orange (or `fill`), the rest a dark track.
+export function bar(pct: number | null, width: number, fill: Tone = 'accent'): Seg[] {
   if (width <= 0) return []
   if (pct === null) return [seg('━'.repeat(width), 'track')]
   // At least one cell for any use, the same rule fillPct gives the desktop's strip.
   const filled = fillPct(pct) === 0 ? 0 : Math.min(width, Math.max(1, Math.round((pct / 100) * width)))
   const out: Seg[] = []
-  if (filled > 0) out.push(seg('━'.repeat(filled), 'accent'))
+  if (filled > 0) out.push(seg('━'.repeat(filled), fill))
   if (filled < width) out.push(seg('━'.repeat(width - filled), 'track'))
   return out
 }
@@ -81,39 +78,12 @@ function percent(pct: number | null, field = 4): Seg[] {
 
 const value = (v: string | null): Seg => (v === null ? seg(DASH, 'muted') : seg(v))
 
-function clip(row: Row, inner: number): Row {
-  if (rowLength(row) <= inner) return row
-  const out: Row = []
-  let room = inner - 1
-  for (const s of row) {
-    if (room <= 0) break
-    out.push({ ...s, text: s.text.slice(0, room) })
-    room -= s.text.length
-  }
-  out.push(seg('…', 'muted'))
-  return out
-}
+// How much of the card's rail survives as the pane narrows, roomiest first; the last is used
+// even if it doesn't fit. `resets`: the 5H gauge's reset countdown.
+export type Fit = { gap: number; tokens: boolean; resets: boolean; bars: boolean }
 
-// How much of the rail survives as the band narrows, roomiest first; the last is used even if
-// it doesn't fit. `resets`: the 5H gauge's reset countdown. `gauges`: how many to keep, of all
-// three unless given. `shortEffort` writes MEDIUM as MED.
-export type Fit = { gap: number; tokens: boolean; resets: boolean; bars: boolean; gauges?: number; shortEffort?: boolean }
-
-const TERMINAL_FITS: Fit[] = [
-  { gap: 2, tokens: true, resets: true, bars: true },
-  { gap: 1, tokens: true, resets: true, bars: true },
-  { gap: 1, tokens: false, resets: false, bars: true },
-  { gap: 1, tokens: false, resets: false, bars: false },
-  { gap: 0, tokens: false, resets: false, bars: false },
-  // Too narrow for every gauge: EFFORT / MODE outlasts 7D, whose reading … would have cut anyway.
-  { gap: 0, tokens: false, resets: false, bars: false, gauges: 2 },
-  { gap: 0, tokens: false, resets: false, bars: false, gauges: 2, shortEffort: true },
-  { gap: 0, tokens: false, resets: false, bars: false, gauges: 1, shortEffort: true },
-]
-const TERMINAL_MIN_BAR = 3
-
-// The flex surfaces keep the 5H countdown a step longer than the token count. They draw at least
-// one gap, so they never try none.
+// The 5H countdown stays a step longer than the token count. A flex surface draws at least one
+// gap, so none is never tried.
 const FLEX_FITS: Fit[] = [
   { gap: 2, tokens: true, resets: true, bars: true },
   { gap: 1, tokens: true, resets: true, bars: true },
@@ -165,7 +135,7 @@ function gauges(s: CardInput, fit: Fit, now?: number): Gauge[] {
       const resets = countdown && fit.resets && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
       return { label, pct: limit?.percentUsed ?? null, tail: resets === null ? [] : [seg(`↻ ${resets}`, 'muted')] }
     }),
-  ].slice(0, fit.gauges)
+  ]
 }
 
 // Without a bar the percentage sits one space past the label, so "100%" never runs into it.
@@ -187,16 +157,14 @@ const upper = (v: string | null): Seg =>
   v === null ? seg(DASH, 'muted') : { text: v.toUpperCase(), tone: 'accent', bold: true }
 
 // The rail's two ends: the model, and EFFORT / MODE.
-const SHORT_EFFORT: Record<string, string> = { medium: 'med', xhigh: 'xhi' }
-
-const ends = (s: CardInput, short = false): { left: Seg; right: Row } => ({
+const ends = (s: CardInput): { left: Seg; right: Row } => ({
   left: s.model === null ? seg(DASH, 'muted') : { text: fmtModel(s.model).toUpperCase(), tone: 'text', bold: true },
-  right: [upper(short && s.effort !== null ? (SHORT_EFFORT[s.effort] ?? s.effort) : s.effort), seg(' / ', 'muted'), upper(s.mode === null ? null : fmtMode(s.mode))],
+  right: [upper(s.effort), seg(' / ', 'muted'), upper(s.mode === null ? null : fmtMode(s.mode))],
 })
 
 // The rail at one fit, and whether it fits `inner` with every bar at least `minBar` cells.
 function line(s: CardInput, inner: number, fit: Fit, minBar: number, now?: number): { row: Row; fits: boolean } {
-  const { left, right } = ends(s, fit.shortEffort)
+  const { left, right } = ends(s)
   const gs = gauges(s, fit, now)
 
   // `pad` widens both sides of every separator alike.
@@ -229,39 +197,23 @@ function frame(columns: number): { width: number; paddingX: number; inner: numbe
   return { width, paddingX, inner: width - 2 - paddingX * 2 }
 }
 
-// The terminal's one full-width line: model | CTX bar | 5H bar | 7D bar | EFFORT / MODE.
-export function buildCard(s: CardInput, columns: number, now?: number): Card {
-  const { width, paddingX, inner } = frame(columns)
-  const { fit, row } = pick(s, inner, TERMINAL_FITS, TERMINAL_MIN_BAR, now)
-  return { width, inner, paddingX, row: clip(row, inner), fit }
-}
-
 export type FlexGauge = { label: Seg; fill: number; pct: Seg; tail: Row }
 
-// What a surface draws. The terminal gets its cell-counted row, `width` cells wide. Any other
-// surface (desktop, vscode, mobile) sets text in a proportional font, where counted cells say
-// little, so it gets the parts to lay out with flex at its full width: `gap` between every two
-// items, the bars taking whatever room is left when `bars`, and each gauge's `fill` in percent.
-export type Rail = { paddingX: number } & (
-  | { surface: 'terminal'; width: number; row: Row }
-  | { surface: 'flex'; gap: number; bars: boolean; stacked: boolean; left: Seg; gauges: FlexGauge[]; right: Row }
-)
+// What the card draws on the desktop, VS Code and mobile. They set text in a proportional font,
+// where counted cells say little, so they get the parts to lay out with flex at the pane's full
+// width: `gap` between every two items, the bars taking whatever room is left when `bars`, and
+// each gauge's `fill` in percent.
+export type Rail = { paddingX: number; gap: number; bars: boolean; stacked: boolean; left: Seg; gauges: FlexGauge[]; right: Row }
 
-export function rail(s: CardInput, surface: RenderSurface, columns: number, now?: number): Rail {
-  if (surface === 'terminal') {
-    const { width, paddingX, row } = buildCard(s, columns, now)
-    return { surface, width, paddingX, row }
-  }
+export function rail(s: CardInput, columns: number, now?: number): Rail {
   const { paddingX, inner } = frame(columns)
   const picked = pick(s, inner, FLEX_FITS, FLEX_MIN_BAR, now).fit
   const stacked = inner < FLEX_ROW_FROM
   const fit = { ...picked, bars: !stacked && (picked.bars || inner >= FLEX_BARS_FROM) }
   const { left, right } = ends(s)
   return {
-    surface: 'flex',
     paddingX,
-    // One gap everywhere, around each separator and inside each gauge alike: the terminal's
-    // spaces around each separator, but never none.
+    // One gap everywhere, around each separator and inside each gauge alike, and never none.
     gap: fit.gap,
     bars: fit.bars,
     stacked,
@@ -269,4 +221,86 @@ export function rail(s: CardInput, surface: RenderSurface, columns: number, now?
     gauges: gauges(s, fit, now).map(g => ({ label: seg(g.label, 'muted'), fill: fillPct(g.pct), pct: pctSeg(g.pct), tail: g.tail })),
     right,
   }
+}
+
+// The terminal's footer line: the gauges at the right of the row under the prompt, beside
+// Claude Code's own mode hint. Quiet until it matters: a reading is grey below WARM, plain and
+// bold from there, and a red chip from CRITICAL.
+const WARM = 75
+const DOT = ' · '
+const FOOTER_BAR = 6
+
+export type Level = 'calm' | 'warm' | 'critical'
+export const level = (pct: number | null): Level =>
+  pct === null || pct < WARM ? 'calm' : pct < CRITICAL ? 'warm' : 'critical'
+
+// Whether this machine's locale tells the time on a 12-hour clock.
+export const HOUR12: boolean = (() => {
+  try {
+    return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 ?? true
+  } catch {
+    return true
+  }
+})()
+
+// An ISO timestamp as local clock time: `3:40pm`, or `15:40` on a 24-hour clock.
+export function fmtClock(iso: string, hour12 = HOUR12): string | null {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const h = d.getHours()
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return hour12 ? `${h % 12 || 12}:${m}${h < 12 ? 'am' : 'pm'}` : `${String(h).padStart(2, '0')}:${m}`
+}
+
+// A label and its percentage at the reading's level, with a bar between them when `width` is given.
+function reading(label: string, pct: number | null, width: number | null = null): Row {
+  const lv = level(pct)
+  const text = pct === null ? DASH : `${Math.floor(pct)}%`
+  const strip = width === null ? [] : [...bar(pct, width, lv === 'critical' ? 'critical' : 'accent'), spaces(1)]
+  if (lv === 'critical') {
+    return [{ text: `${label} `, tone: 'critical', bold: true }, ...strip, { text: ` ${text} `, tone: 'critical', bold: true, chip: true }]
+  }
+  if (lv === 'warm') return [seg(`${label} `), ...strip, { text, tone: 'text', bold: true }]
+  return [seg(`${label} `, 'muted'), ...strip, seg(text, 'muted')]
+}
+
+// How much of the footer survives as its room narrows, roomiest first. `clock`: when the 5h
+// window resets, as a time of day; `countdown`: how long until then.
+export type FooterFit = { model: boolean; bar: boolean; clock: boolean; countdown: boolean; effort: boolean; gauges: number }
+
+const FOOTER_FITS: FooterFit[] = [
+  { model: true, bar: true, clock: true, countdown: true, effort: true, gauges: 3 },
+  { model: true, bar: true, clock: false, countdown: true, effort: true, gauges: 3 },
+  { model: false, bar: true, clock: false, countdown: true, effort: true, gauges: 3 },
+  { model: false, bar: false, clock: false, countdown: true, effort: false, gauges: 3 },
+  { model: false, bar: false, clock: false, countdown: false, effort: false, gauges: 3 },
+  { model: false, bar: false, clock: false, countdown: false, effort: false, gauges: 2 },
+]
+
+function footerAt(s: CardInput, fit: FooterFit, now: number | undefined, hour12: boolean): Row {
+  const parts: Row[] = []
+  if (fit.model) parts.push([ends(s).left])
+  parts.push(reading('ctx', s.ctxPercent, fit.bar ? FOOTER_BAR : null))
+  for (const { kind, label, countdown } of WINDOWS.slice(0, fit.gauges - 1)) {
+    const limit = s.limits.find(l => l.kind === kind)
+    const pct = limit?.percentUsed ?? null
+    const part = reading(label.toLowerCase(), pct)
+    const left = countdown && fit.countdown && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
+    if (left !== null) {
+      const at = fit.clock ? fmtClock(limit!.resetsAt!, hour12) : null
+      part.push(seg(` ↻ ${left}${at === null ? '' : ` → ${at}`}`, level(pct) === 'critical' ? 'critical' : 'muted'))
+    }
+    parts.push(part)
+  }
+  if (fit.effort) parts.push([s.effort === null ? seg(DASH, 'muted') : seg(s.effort, 'accent')])
+  return parts.flatMap((part, i) => (i === 0 ? part : [seg(DOT, 'muted'), ...part]))
+}
+
+// The footer in `room` cells: the roomiest fit that fits, or nothing when none does.
+export function footer(s: CardInput, room: number, now?: number, hour12 = HOUR12): Row {
+  for (const fit of FOOTER_FITS) {
+    const row = footerAt(s, fit, now, hour12)
+    if (rowLength(row) <= room) return row
+  }
+  return []
 }
