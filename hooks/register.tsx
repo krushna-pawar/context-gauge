@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage, Timer } from 'claude-code'
 
 import type { Snap } from '../types'
-import { footer, FOOTER_DEFAULTS, rail, type FooterOptions, type Row, type Seg, type Tone } from './format'
+import { footer, FOOTER_DEFAULTS, isZone, rail, type FooterOptions, type Row, type Seg, type Tone } from './format'
 
 const COLORS: Record<Tone, string> = { text: 'text', muted: 'inactive', accent: 'claude', critical: 'error', track: 'subtle' }
 
@@ -19,12 +19,16 @@ const snap = atom({ plugin: 'context-gauge', key: 'snap' } as const, EMPTY)
 const patch = ($: EngineInterface, change: Partial<Snap>) => update($, snap, s => ({ ...EMPTY, ...s, ...change }))
 
 // A response that reports no 5h/7d windows (a session before its first request) keeps the last readings.
-const fromUsage = (u: Pick<SessionUsage, 'context' | 'rateLimits'>): Partial<Snap> => ({
-  ctxTokens: u.context.tokens ?? null,
-  ctxWindow: u.context.window ?? null,
-  ctxPercent: u.context.percent ?? null,
-  ...(u.rateLimits.length ? { limits: u.rateLimits.map(r => ({ kind: r.kind, percentUsed: r.percentUsed, resetsAt: r.resetsAt })) } : {}),
-})
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+const fromUsage = (u: Pick<SessionUsage, 'context' | 'rateLimits'>): Partial<Snap> => {
+  const limits = u.rateLimits.filter(r => num(r.percentUsed) !== null).map(r => ({ kind: r.kind, percentUsed: r.percentUsed, resetsAt: r.resetsAt }))
+  return {
+    ctxTokens: num(u.context.tokens),
+    ctxWindow: num(u.context.window),
+    ctxPercent: num(u.context.percent),
+    ...(limits.length ? { limits } : {}),
+  }
+}
 
 const model = ($: EngineInterface) => $.session.model().catch(() => null)
 const settings = ($: EngineInterface) => $.settings.read().catch(() => null)
@@ -57,6 +61,9 @@ export const register: Register = (on, options) => {
     clock: options?.showResetClock !== false,
     noticeAt: Math.min(percent(options?.noticeAt, FOOTER_DEFAULTS.noticeAt), alertAt),
     alertAt,
+    hour12: options?.clockStyle === '12-hour' || (options?.clockStyle !== '24-hour' && FOOTER_DEFAULTS.hour12),
+    timeZone: typeof options?.timeZone === 'string' && isZone(options.timeZone.trim()) ? options.timeZone.trim() : '',
+    utc: FOOTER_DEFAULTS.utc,
   }
 
   on('session.start', async ($, e, next) => {

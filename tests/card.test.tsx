@@ -172,7 +172,7 @@ describe('band', () => {
       rateLimits: [{ kind: 'five_hour', percentUsed: 31, resetsAt: new Date(NOW + 80 * 60_000).toISOString() }, { kind: 'seven_day', percentUsed: 92 }],
       changed: ['context', 'rateLimits'],
     } as never)
-    expect(await line($, 150)).toMatch(/^ctx ━━━━━━ 2%  5h 31% resets in 1:20 at \S+$/)
+    expect(await line($, 150)).toMatch(/^ctx ━━━━━━ 2%  5h 31% resets in 1:20 at \S+( UTC)?$/)
   })
 
   test('settings that are missing, unknown or unreadable leave a dash', async ($, on) => {
@@ -252,6 +252,38 @@ describe('band', () => {
     await ui.press({ key: 'model' })
     expect(ran).toEqual(['/model'])
     await ui.unmount()
+  })
+
+  test('terminal: the reset in the time zone and clock style the person chose', { options: { timeZone: ' Asia/Kolkata ', clockStyle: '24-hour' } }, async ($, on) => {
+    engine(on)
+    await $.session.measure({
+      context: { tokens: 5_000, window: 200_000, percent: 2 },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 80, resetsAt: new Date(NOW + 80 * 60_000).toISOString() }],
+      changed: ['context', 'rateLimits'],
+    } as never)
+    // NOW is 12:00 UTC: 80 minutes on is 18:50 in Kolkata.
+    expect(await line($, 150)).toBe('—  ctx ━━━━━━ 2%  5h 80% resets in 1:20 at 18:50  7d —')
+  })
+
+  test('terminal: an unknown time zone falls back to the machine\'s', { options: { timeZone: 'Mars/Olympus', clockStyle: '12-hour' } }, async ($, on) => {
+    engine(on)
+    await $.session.measure({
+      context: { tokens: 5_000, window: 200_000, percent: 2 },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 80, resetsAt: new Date(NOW + 80 * 60_000).toISOString() }],
+      changed: ['context', 'rateLimits'],
+    } as never)
+    expect(await line($, 150)).toMatch(/resets in 1:20 at \d+:20[ap]m( UTC)?  7d —$/)
+  })
+
+  test('readings that are not numbers show a dash, never NaN', async ($, on) => {
+    engine(on)
+    await $.session.measure({
+      context: { tokens: NaN, window: 200_000, percent: NaN },
+      rateLimits: [{ kind: 'five_hour', percentUsed: NaN }, { kind: 'seven_day', percentUsed: 12 }],
+      changed: ['context', 'rateLimits'],
+    } as never)
+    expect(await line($, 150)).toBe('—  ctx ━━━━━━ —  5h —  7d 12%')
+    expect((await draw($, 150)).text).not.toContain('NaN')
   })
 
   test('terminal: a threshold out of range is clamped, and the notice never sits above the alert', { options: { noticeAt: 99, alertAt: 80 } }, async ($, on) => {

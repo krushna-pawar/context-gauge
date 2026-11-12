@@ -1,6 +1,6 @@
 {
   "name": "context-gauge",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "description": "Model, context window and 5h/7d usage beside the Claude Code prompt: one quiet line under it in the terminal, a card above it on the desktop.",
   "types": "./types/index.d.ts",
   "author": {
@@ -45,6 +45,23 @@
       "title": "Alert from (%)",
       "description": "Terminal line: from this percentage a reading turns Claude orange.",
       "default": 95
+    },
+    "clockStyle": {
+      "type": "string",
+      "title": "Clock style",
+      "description": "Terminal line: tell the reset's time of day on a 12-hour or 24-hour clock. Auto follows the machine Claude Code runs on.",
+      "default": "auto",
+      "options": [
+        "auto",
+        "12-hour",
+        "24-hour"
+      ]
+    },
+    "timeZone": {
+      "type": "string",
+      "title": "Time zone",
+      "description": "Terminal line: the time zone for the reset's time of day, as an IANA name such as Asia/Kolkata. Leave empty to use the machine Claude Code runs on.",
+      "default": ""
     }
   }
 }

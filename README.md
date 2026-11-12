@@ -56,6 +56,8 @@ Run `/config` and look for context-gauge. All of these are for the terminal line
 | Show the effort | off | The effort level, which opens the effort picker on a click |
 | Show the 7-day limit | on | The 7d reading |
 | Show the reset's time of day | on | `at 3:40pm` after `resets in 0:52` |
+| Clock style | auto | 12-hour or 24-hour; auto follows the machine Claude Code runs on |
+| Time zone | empty | An IANA name such as `Asia/Kolkata`; empty uses the machine Claude Code runs on |
 | Notice from (%) | 75 | Where a reading turns bold and 5h says when it resets |
 | Alert from (%) | 95 | Where a reading turns Claude orange |
 
@@ -90,6 +92,9 @@ effort / mode, then the gauges without bars.
 - **Clicks** need a terminal that passes the mouse to Claude Code. During a turn, the picker opens
   once the turn ends. Where the window is too narrow for the model, there is nothing to click;
   `/model` still works.
+- **The reset's time of day** is told in the time zone of the machine Claude Code runs on. Over
+  SSH or in a cloud session that is often UTC, not yours: the line then says `at 7:00pm UTC`. Set
+  Time zone to get your own. The countdown beside it is right everywhere.
 - **The terminal line** can't see how long Claude Code's hint beside it is. It leaves the room
   that hint needs at its shortest in the current permission mode; where the hint is longer, or
   you changed mode with Shift+Tab since your last prompt, Claude Code shortens its hint.

@@ -40,19 +40,36 @@ export function fmtIn(iso: string, now: number): string | null {
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`
 }
 
-export const HOUR12: boolean = (() => {
+// The clock of the machine Claude Code runs on. A server's is often UTC, not the person's own
+// zone, so a time told in UTC says so.
+const MACHINE = (() => {
   try {
-    return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 ?? true
+    const o = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions()
+    return { hour12: o.hour12 ?? !/^h2/.test(o.hourCycle ?? ''), utc: /^(Etc\/)?(UTC|GMT|Universal|Zulu)$/.test(o.timeZone) }
   } catch {
-    return true
+    return { hour12: true, utc: false }
   }
 })()
 
-export function fmtClock(iso: string, hour12 = HOUR12): string | null {
+// The hour (0-23) and minute of a moment in an IANA time zone, or null where the zone is unknown.
+function inZone(d: Date, timeZone: string): [number, number] | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hourCycle: 'h23', timeZone }).formatToParts(d)
+    const of = (type: string) => Number(parts.find(p => p.type === type)?.value)
+    return Number.isNaN(of('hour') + of('minute')) ? null : [of('hour'), of('minute')]
+  } catch {
+    return null
+  }
+}
+
+export const isZone = (timeZone: string) => inZone(new Date(0), timeZone) !== null
+
+// `3:40pm`, or `15:40` on a 24-hour clock: in `timeZone` when given, else the machine's.
+export function fmtClock(iso: string, hour12 = MACHINE.hour12, timeZone = ''): string | null {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return null
-  const h = d.getHours()
-  const m = String(d.getMinutes()).padStart(2, '0')
+  const [h, min] = (timeZone && inZone(d, timeZone)) || [d.getHours(), d.getMinutes()]
+  const m = String(min).padStart(2, '0')
   return hour12 ? `${h % 12 || 12}:${m}${h < 12 ? 'am' : 'pm'}` : `${String(h).padStart(2, '0')}:${m}`
 }
 
@@ -134,8 +151,18 @@ export function rail(s: CardInput, columns: number, now?: number) {
 }
 
 
-export type FooterOptions = { model: boolean; effort: boolean; week: boolean; clock: boolean; noticeAt: number; alertAt: number }
-export const FOOTER_DEFAULTS: FooterOptions = { model: true, effort: false, week: true, clock: true, noticeAt: 75, alertAt: 95 }
+export type FooterOptions = {
+  model: boolean
+  effort: boolean
+  week: boolean
+  clock: boolean
+  noticeAt: number
+  alertAt: number
+  hour12: boolean
+  timeZone: string
+  utc: boolean
+}
+export const FOOTER_DEFAULTS: FooterOptions = { model: true, effort: false, week: true, clock: true, noticeAt: 75, alertAt: 95, timeZone: '', ...MACHINE }
 
 function reading(label: string, pct: number | null, o: FooterOptions, width = 0): Row {
   const text = pct === null ? DASH : `${Math.floor(pct)}%`
@@ -146,7 +173,7 @@ function reading(label: string, pct: number | null, o: FooterOptions, width = 0)
 
 // The footer after `drop` steps of narrowing: the reset's time of day goes first, then the model,
 // the bar and the effort, the countdown, 7d, and 5h.
-function footerAt(s: CardInput, drop: number, o: FooterOptions, now: number | undefined, hour12: boolean): Row[] {
+function footerAt(s: CardInput, drop: number, o: FooterOptions, now?: number): Row[] {
   const parts: Row[] = []
   if (drop < 2 && o.model) parts.push([{ text: model(s), tone: s.model === null ? 'muted' : 'accent', press: 'model' }])
   parts.push(reading('ctx', s.ctxPercent, o, drop < 3 ? 6 : 0))
@@ -156,8 +183,8 @@ function footerAt(s: CardInput, drop: number, o: FooterOptions, now: number | un
     const part = reading(label.toLowerCase(), pct, o)
     const left = i === 0 && drop < 4 && pct !== null && pct >= o.noticeAt && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
     if (left !== null) {
-      const at = drop < 1 && o.clock ? fmtClock(limit!.resetsAt!, hour12) : null
-      part.push(seg(` resets in ${left}${at === null ? '' : ` at ${at}`}`, 'muted'))
+      const at = drop < 1 && o.clock ? fmtClock(limit!.resetsAt!, o.hour12, o.timeZone) : null
+      part.push(seg(` resets in ${left}${at === null ? '' : ` at ${at}${o.utc && !o.timeZone ? ' UTC' : ''}`}`, 'muted'))
     }
     parts.push(part)
   })
@@ -165,9 +192,9 @@ function footerAt(s: CardInput, drop: number, o: FooterOptions, now: number | un
   return parts
 }
 
-export function footer(s: CardInput, room: number, now?: number, o = FOOTER_DEFAULTS, hour12 = HOUR12): Row[] {
+export function footer(s: CardInput, room: number, now?: number, o = FOOTER_DEFAULTS): Row[] {
   for (let drop = 0; drop < 7; drop++) {
-    const groups = footerAt(s, drop, o, now, hour12)
+    const groups = footerAt(s, drop, o, now)
     if (groups.map(rowText).join('  ').length <= room) return groups
   }
   return []

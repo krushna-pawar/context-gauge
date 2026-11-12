@@ -8,6 +8,7 @@ import {
   fmtMode,
   fmtTokens,
   footer,
+  isZone,
   FOOTER_DEFAULTS,
   rail,
   rowText,
@@ -92,10 +93,12 @@ describe('footer', () => {
   const CALM: CardInput = { ...FULL, ctxPercent: 5, limits: limits(62) }
   const FILLING: CardInput = { ...CALM, limits: limits(78) }
   const clock = fmtClock(at(52), true)!
+  // A 12-hour clock in the machine's own zone, which is not UTC: what a person's laptop has.
+  const LOCAL: FooterOptions = { ...FOOTER_DEFAULTS, hour12: true, timeZone: '', utc: false }
   // The footer as drawn: its groups two cells apart; and as one flat row of segments.
   const drawn = (groups: Row[]) => groups.map(rowText).join('  ')
-  const text = (input: CardInput, room: number, o: Partial<FooterOptions> = {}) => drawn(footer(input, room, now, { ...FOOTER_DEFAULTS, ...o }, true))
-  const segs = (input: CardInput, o: Partial<FooterOptions> = {}) => footer(input, 200, now, { ...FOOTER_DEFAULTS, ...o }, true).flat()
+  const text = (input: CardInput, room: number, o: Partial<FooterOptions> = {}) => drawn(footer(input, room, now, { ...LOCAL, ...o }))
+  const segs = (input: CardInput, o: Partial<FooterOptions> = {}) => footer(input, 200, now, { ...LOCAL, ...o }).flat()
 
   test('calm: one row of the model and three readings; only the context has a bar, and nothing says when 5h resets', () => {
     expect(text(CALM, 200)).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 62%  7d 45%')
@@ -133,7 +136,19 @@ describe('footer', () => {
     expect(fmtClock(local(0, 5), false)).toBe('00:05')
     expect(fmtClock(local(12, 0), true)).toBe('12:00pm')
     expect(fmtClock('not a date', true)).toBe(null)
-    expect(drawn(footer(FILLING, 200, now, FOOTER_DEFAULTS, false))).toContain(`resets in 0:52 at ${fmtClock(at(52), false)}`)
+    expect(text(FILLING, 200, { hour12: false })).toContain(`resets in 0:52 at ${fmtClock(at(52), false)}  7d`)
+  })
+
+  test('the reset in a chosen time zone; a machine on UTC says so unless a zone is chosen', () => {
+    // 12:52 UTC.
+    expect(fmtClock(at(52), true, 'Asia/Kolkata')).toBe('6:22pm')
+    expect(fmtClock(at(52), false, 'America/Los_Angeles')).toBe('05:52')
+    expect(fmtClock(at(52), true, 'Not/AZone')).toBe(clock)
+    expect(isZone('Asia/Kolkata')).toBe(true)
+    expect(isZone('Not/AZone')).toBe(false)
+    expect(text(FILLING, 200, { timeZone: 'Asia/Kolkata' })).toContain('resets in 0:52 at 6:22pm  7d')
+    expect(text(FILLING, 200, { utc: true })).toContain(`resets in 0:52 at ${clock} UTC  7d`)
+    expect(text(FILLING, 200, { utc: true, timeZone: 'Asia/Kolkata' })).toContain('at 6:22pm  7d')
   })
 
   test('no reset once it is past or without a clock', () => {
