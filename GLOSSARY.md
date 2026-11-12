@@ -14,8 +14,8 @@
 - **Tail**: what follows a gauge's percentage: the token count for CTX, the reset countdown for 5H.
 - **Reset**: when the 5-hour window starts over. The footer says it twice: the **countdown**
   (`↻ 1:20`) and the **clock** time (`→ 3:40pm`).
-- **Level**: how loud a footer reading is: calm (under 75%, grey), warm (from 75%, plain and bold)
-  or critical (from 90%, a red **chip** around the percentage).
+- **Level**: how loud a footer reading is: calm (under 75%, grey), warm (from 75%, plain, its
+  percentage bold) or critical (from 90%, its percentage red).
 - **Fit**: how much survives at a width, tried roomiest first. The card's fits choose the gap,
   token count, countdown and bars; the footer's choose the model, bar, clock, countdown, effort
   and how many gauges.

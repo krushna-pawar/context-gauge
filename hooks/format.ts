@@ -1,8 +1,8 @@
 import type { Snap } from '../types'
 
 export type Tone = 'text' | 'muted' | 'accent' | 'critical' | 'track'
-// `chip`: drawn inverse, the tone as its background. `press`: a click on it opens that picker.
-export type Seg = { text: string; tone: Tone; bold?: boolean; chip?: boolean; press?: 'model' | 'effort' }
+// `press`: a click on it opens that picker.
+export type Seg = { text: string; tone: Tone; bold?: boolean; press?: 'model' | 'effort' }
 export type Row = Seg[]
 export type CardInput = Snap
 
@@ -224,8 +224,9 @@ export function rail(s: CardInput, columns: number, now?: number): Rail {
 }
 
 // The terminal's footer line: the gauges at the right of the row under the prompt, beside
-// Claude Code's own mode hint. Quiet until it matters: a reading is grey below WARM, plain and
-// bold from there, and a red chip from CRITICAL.
+// Claude Code's own mode hint. Quiet until it matters: a reading is grey below WARM, and from
+// there its percentage is bold: plain, then red from CRITICAL. Nothing louder: a red block
+// beside the prompt nagged someone already near a limit.
 const WARM = 75
 const DOT = ' · '
 const FOOTER_BAR = 6
@@ -257,11 +258,8 @@ function reading(label: string, pct: number | null, width: number | null = null)
   const lv = level(pct)
   const text = pct === null ? DASH : `${Math.floor(pct)}%`
   const strip = width === null ? [] : [...bar(pct, width, lv === 'critical' ? 'critical' : 'accent'), spaces(1)]
-  if (lv === 'critical') {
-    return [{ text: `${label} `, tone: 'critical', bold: true }, ...strip, { text: ` ${text} `, tone: 'critical', bold: true, chip: true }]
-  }
-  if (lv === 'warm') return [seg(`${label} `), ...strip, { text, tone: 'text', bold: true }]
-  return [seg(`${label} `, 'muted'), ...strip, seg(text, 'muted')]
+  if (lv === 'calm') return [seg(`${label} `, 'muted'), ...strip, seg(text, 'muted')]
+  return [seg(`${label} `), ...strip, { text, tone: lv === 'critical' ? 'critical' : 'text', bold: true }]
 }
 
 // How much of the footer survives as its room narrows, roomiest first. `clock`: when the 5h
@@ -288,7 +286,7 @@ function footerAt(s: CardInput, fit: FooterFit, now: number | undefined, hour12:
     const left = countdown && fit.countdown && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
     if (left !== null) {
       const at = fit.clock ? fmtClock(limit!.resetsAt!, hour12) : null
-      part.push(seg(` ↻ ${left}${at === null ? '' : ` → ${at}`}`, level(pct) === 'critical' ? 'critical' : 'muted'))
+      part.push(seg(` ↻ ${left}${at === null ? '' : ` → ${at}`}`, 'muted'))
     }
     parts.push(part)
   }

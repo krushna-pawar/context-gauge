@@ -132,7 +132,6 @@ describe('footer', () => {
 
   test('quiet below 75%: every reading is muted', () => {
     const row = footer(S, 200, now, true)
-    expect(row.some(s => s.chip)).toBe(false)
     for (const t of ['ctx ', '5%', '5h ', '62%', '7d ', '45%']) expect(row.find(s => s.text === t)?.tone).toBe('muted')
     expect(row.find(s => /^━+$/.test(s.text))?.tone).toBe('accent')
     // The two ends are what a click acts on.
@@ -141,19 +140,20 @@ describe('footer', () => {
     expect(row.filter(s => s.press).length).toBe(2)
   })
 
-  test('from 75% a reading is plain and bold; from 90% a red chip, its label, bar and reset red too', () => {
+  test('from 75% a percentage is plain and bold; from 90% red and bold, and its bar red: nothing else changes', () => {
     const warm = footer({ ...S, limits: [{ kind: 'five_hour', percentUsed: 78, resetsAt: at(52) }] }, 200, now, true)
     expect(warm.find(s => s.text === '78%')).toEqual({ text: '78%', tone: 'text', bold: true })
     expect(warm.find(s => s.text === '5h ')?.tone).toBe('text')
     expect(warm.find(s => s.text.startsWith(' ↻'))?.tone).toBe('muted')
 
     const hot = footer({ ...S, ctxPercent: 95, limits: [{ kind: 'five_hour', percentUsed: 93.6, resetsAt: at(21) }] }, 200, now, true)
-    expect(hot.find(s => s.text === ' 93% ')).toEqual({ text: ' 93% ', tone: 'critical', bold: true, chip: true })
-    expect(hot.find(s => s.text === '5h ')?.tone).toBe('critical')
-    expect(hot.find(s => s.text.startsWith(' ↻ 0:21'))?.tone).toBe('critical')
-    expect(hot.find(s => s.text === ' 95% ')?.chip).toBe(true)
+    expect(hot.find(s => s.text === '93%')).toEqual({ text: '93%', tone: 'critical', bold: true })
+    expect(hot.find(s => s.text === '5h ')?.tone).toBe('text')
+    expect(hot.find(s => s.text.startsWith(' ↻ 0:21'))?.tone).toBe('muted')
+    expect(hot.find(s => s.text === '95%')).toEqual({ text: '95%', tone: 'critical', bold: true })
     expect(hot.find(s => /^━+$/.test(s.text))?.tone).toBe('critical')
-    expect(hot.filter(s => s.chip).length).toBe(2)
+    // Only the two percentages and the context bar's fill are red.
+    expect(hot.filter(s => s.tone === 'critical').map(s => s.text)).toEqual(['━━━━━━', '95%', '93%'])
   })
 
   test('missing data shows a dash, never a guess', () => {

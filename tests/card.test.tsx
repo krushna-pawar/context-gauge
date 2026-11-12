@@ -117,7 +117,7 @@ describe('band', () => {
       changed: ['context', 'rateLimits', 'cost'],
     })
 
-    expect(await line($, 150)).toBe('OPUS 5.5 · ctx ━━━━━━ 42% · 5h 31% · 7d  92%  · high')
+    expect(await line($, 150)).toBe('OPUS 5.5 · ctx ━━━━━━ 42% · 5h 31% · 7d 92% · high')
     const { text } = await draw($, 150, { isWorking: true })
     expect(text.startsWith('OPUS 5.5')).toBe(true)
     expect(text).toContain('84.1k / 200k')
@@ -143,7 +143,7 @@ describe('band', () => {
     await $.session.end({ reason: 'clear', sessionId: 's1' } as never)
     await $.session.start({ source: 'clear', cwd: '/work' } as never)
 
-    expect(await line($, 150)).toBe('OPUS 5.5 · ctx ━━━━━━ — · 5h 31% · 7d  92%  · high')
+    expect(await line($, 150)).toBe('OPUS 5.5 · ctx ━━━━━━ — · 5h 31% · 7d 92% · high')
     const { text } = await draw($, 150)
     expect(text).toContain('— / 200k')
     expect(text.endsWith('HIGH / PLAN')).toBe(true)
@@ -226,7 +226,7 @@ describe('band', () => {
     await ui.unmount()
   })
 
-  test('terminal: where the model and the effort no longer fit, nothing is left to click, and no space is lost', async ($, on) => {
+  test('terminal: where the model and the effort no longer fit, nothing is left to click', async ($, on) => {
     engine(on)
     await $.session.measure({
       context: { tokens: 5_000, window: 200_000, percent: 2 },
@@ -236,8 +236,7 @@ describe('band', () => {
     const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 70, rows: 40 } })
     expect((await ui.findAll({ type: 'Button' })).length).toBe(0)
     await ui.unmount()
-    // The chip keeps the space at its end.
-    expect(await line($, 70)).toBe('ctx 2% · 5h 31% · 7d  92% ')
+    expect(await line($, 70)).toBe('ctx 2% · 5h 31% · 7d 92%')
   })
 
   test('desktop: the row under the prompt is the engine\'s own', async ($, on) => {

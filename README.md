@@ -36,8 +36,9 @@ effort picker: the same pickers `/model` and `/effort` open.
 In the terminal the readings are as grey as Claude Code's own hints, so they stay out of the way:
 
 - **Under 75%**: grey.
-- **From 75%**: that reading turns plain and bold.
-- **From 90%**: its percentage becomes a red chip, and its label, bar and reset time turn red.
+- **From 75%**: that reading turns plain, its percentage bold.
+- **From 90%**: its percentage turns red, and so does the context bar's fill. Nothing else
+  changes: no block of color, so it doesn't nag once you already know.
 
 On the card, percentages turn red at 90%.
 

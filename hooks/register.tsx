@@ -148,7 +148,7 @@ export const register: Register = on => {
     // /model and /effort do. Between them, runs of plain spans are one Text each. The spaces at a
     // run's ends would be dropped where it meets a Button, so the Box's gap stands in for them.
     const span = (part: Seg, key: string) => (
-      <Text key={key} color={COLORS[part.tone]} bold={part.bold} inverse={part.chip}>
+      <Text key={key} color={COLORS[part.tone]} bold={part.bold}>
         {part.text}
       </Text>
     )
