@@ -137,21 +137,50 @@ export const register: Register = on => {
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     if (e.surface !== 'terminal') return next(e)
 
-    const { Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const s = await read($, snap)
     const modes = e.props.modes.join(' & ')
     const room = (e.viewport?.columns ?? FOOTER_COLUMNS) - FOOTER_RESERVE - (modes ? modes.length + 3 : 0)
     const row = footer({ ...EMPTY, ...s }, room, await $.clock.now())
     if (!row.length) return next(e)
-    return (
-      <Text wrap="truncate-end">
-        {row.map((part, j) => (
-          <Text key={String(j)} color={COLORS[part.tone]} bold={part.bold} inverse={part.chip}>
-            {part.text}
-          </Text>
-        ))}
-        {modes ? <Text color={COLORS.muted}>{` · ${modes}`}</Text> : null}
+
+    // The model and the effort are Buttons: a click opens Claude Code's own picker for it, as
+    // /model and /effort do. Between them, runs of plain spans are one Text each. The spaces at a
+    // run's ends would be dropped where it meets a Button, so the Box's gap stands in for them.
+    const span = (part: Seg, key: string) => (
+      <Text key={key} color={COLORS[part.tone]} bold={part.bold} inverse={part.chip}>
+        {part.text}
       </Text>
+    )
+    const items: Seg[][] = []
+    for (const part of modes ? [...row, { text: ` · ${modes}`, tone: 'muted' as const }] : row) {
+      const last = items[items.length - 1]
+      if (part.press || !last || last[0]!.press) items.push([part])
+      else last.push(part)
+    }
+    return (
+      <Box flexDirection="row" columnGap={1}>
+        {items.map((run, i) => {
+          const press = run[0]!.press
+          if (press) {
+            return (
+              <Button key={press} plain onPress={() => void $.command.run({ command: press, args: '' }).catch(() => {})}>
+                {span(run[0]!, press)}
+              </Button>
+            )
+          }
+          // Only the ends that meet a Button: every other space is the run's own.
+          const head = i > 0
+          const tail = i < items.length - 1
+          const trimmed = run.map((part, j) => {
+            let text = part.text
+            if (head && j === 0) text = text.trimStart()
+            if (tail && j === run.length - 1) text = text.trimEnd()
+            return { ...part, text }
+          })
+          return <Text key={String(i)}>{trimmed.map((part, j) => span(part, String(j)))}</Text>
+        })}
+      </Box>
     )
   })
 

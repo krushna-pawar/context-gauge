@@ -28,6 +28,9 @@ Both show:
 
 Colors follow your Claude Code theme, so the gauges read on light themes as well as dark ones.
 
+In the terminal, click the model to open Claude Code's model picker, or the effort to open its
+effort picker: the same pickers `/model` and `/effort` open.
+
 ## Quiet until it matters
 
 In the terminal the readings are as grey as Claude Code's own hints, so they stay out of the way:
@@ -65,6 +68,9 @@ effort / mode, then the gauges without bars.
   settings (`/effort` saves it).
 - **5h / 7d** show `—` until Claude Code has a reading, usually after the first request, and
   only on subscription plans.
+- **Clicks** need a terminal that passes the mouse to Claude Code. During a turn, the picker opens
+  once the turn ends. On the narrowest fits the model and the effort are gone, so there is
+  nothing to click; `/model` and `/effort` still work.
 - **The terminal line** can't see how long Claude Code's hint beside it is, so it leaves 42
   columns for it. Where the hint is longer, Claude Code shortens the hint.
 - **Mode after Shift+Tab** (the card only) updates with your next prompt or tool call: Claude Code

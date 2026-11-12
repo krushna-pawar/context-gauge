@@ -1,8 +1,8 @@
 import type { Snap } from '../types'
 
 export type Tone = 'text' | 'muted' | 'accent' | 'critical' | 'track'
-// `chip`: drawn inverse, the tone as its background.
-export type Seg = { text: string; tone: Tone; bold?: boolean; chip?: boolean }
+// `chip`: drawn inverse, the tone as its background. `press`: a click on it opens that picker.
+export type Seg = { text: string; tone: Tone; bold?: boolean; chip?: boolean; press?: 'model' | 'effort' }
 export type Row = Seg[]
 export type CardInput = Snap
 
@@ -279,7 +279,7 @@ const FOOTER_FITS: FooterFit[] = [
 
 function footerAt(s: CardInput, fit: FooterFit, now: number | undefined, hour12: boolean): Row {
   const parts: Row[] = []
-  if (fit.model) parts.push([ends(s).left])
+  if (fit.model) parts.push([{ ...ends(s).left, press: 'model' }])
   parts.push(reading('ctx', s.ctxPercent, fit.bar ? FOOTER_BAR : null))
   for (const { kind, label, countdown } of WINDOWS.slice(0, fit.gauges - 1)) {
     const limit = s.limits.find(l => l.kind === kind)
@@ -292,7 +292,7 @@ function footerAt(s: CardInput, fit: FooterFit, now: number | undefined, hour12:
     }
     parts.push(part)
   }
-  if (fit.effort) parts.push([s.effort === null ? seg(DASH, 'muted') : seg(s.effort, 'accent')])
+  if (fit.effort) parts.push([{ ...(s.effort === null ? seg(DASH, 'muted') : seg(s.effort, 'accent')), press: 'effort' }])
   return parts.flatMap((part, i) => (i === 0 ? part : [seg(DOT, 'muted'), ...part]))
 }
 

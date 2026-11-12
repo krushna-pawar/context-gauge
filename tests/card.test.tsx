@@ -27,9 +27,10 @@ const draw = async ($: Engine, columns: number, extra = {}, surface: 'terminal' 
 // The terminal's row under the prompt, right of the engine's own hint, as text.
 const line = async ($: Engine, columns: number, modes: string[] = [], surface: 'terminal' | 'desktop' = 'terminal') => {
   const ui = await $.ui.mount({ plugin: 'context-gauge', surface, component: 'SessionMode', props: { modes }, viewport: { columns, rows: 40 } })
-  const tree = await ui.drawn()
+  const tree = (await ui.drawn()) as { type: string; props?: Record<string, unknown>; children?: RenderNode[] }
   await ui.unmount()
-  return flat(tree as RenderNode)
+  // Our row is a Box of the model, the gauges and the effort, one cell between them.
+  return tree.type === 'Box' ? (tree.children ?? []).map(flat).join(' '.repeat(tree.props?.columnGap as number)) : flat(tree as RenderNode)
 }
 
 // The cells the footer leaves for the engine's hint at its left.
@@ -39,10 +40,15 @@ const RESERVE = 42
 // `settings` stands for the merged settings.json; `/effort` writes into it as it runs.
 const NOW = Date.parse('2026-10-17T12:00:00Z')
 
+// The slash commands the engine was asked to run, in order; emptied by each engine().
+const ran: string[] = []
+
 const engine = (on: On, settings: Record<string, unknown> = {}) => {
+  ran.length = 0
   const clock = mock.clock(on, { now: NOW })
   on('settings.read', () => ({ value: { ...settings } }))
   on('command.run', { command: 'effort' }, (_$, e) => {
+    ran.push(`/${e.command}`)
     if (e.args) settings.effortLevel = e.args
     return { text: '' }
   })
@@ -63,6 +69,11 @@ const engine = (on: On, settings: Record<string, unknown> = {}) => {
   on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>no band</Text>
+  })
+  // The pickers /model and /effort open: the test only needs to see them asked for.
+  on('command.run', { command: 'model' }, (_$, e) => {
+    ran.push(`/${e.command}`)
+    return { text: '' }
   })
   on('turn.step', async function* (_$, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: null }
@@ -202,6 +213,31 @@ describe('band', () => {
     // They take their share of the room: without them this width keeps every gauge.
     expect(await line($, 80)).toBe('— · ctx ━━━━━━ — · 5h — · 7d — · —')
     expect(await line($, 80, ['focus', 'memory paused'])).toBe('ctx — · 5h — · focus & memory paused')
+  })
+
+  test('terminal: a click on the model or the effort opens its picker, as /model and /effort do', async ($, on) => {
+    engine(on)
+    const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 150, rows: 40 } })
+    expect((await ui.findAll({ type: 'Button' })).length).toBe(2)
+    await ui.press({ key: 'model' })
+    expect(ran).toEqual(['/model'])
+    await ui.press({ key: 'effort' })
+    expect(ran).toEqual(['/model', '/effort'])
+    await ui.unmount()
+  })
+
+  test('terminal: where the model and the effort no longer fit, nothing is left to click, and no space is lost', async ($, on) => {
+    engine(on)
+    await $.session.measure({
+      context: { tokens: 5_000, window: 200_000, percent: 2 },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 31 }, { kind: 'seven_day', percentUsed: 92 }],
+      changed: ['context', 'rateLimits'],
+    } as never)
+    const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 70, rows: 40 } })
+    expect((await ui.findAll({ type: 'Button' })).length).toBe(0)
+    await ui.unmount()
+    // The chip keeps the space at its end.
+    expect(await line($, 70)).toBe('ctx 2% · 5h 31% · 7d  92% ')
   })
 
   test('desktop: the row under the prompt is the engine\'s own', async ($, on) => {

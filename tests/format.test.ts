@@ -135,8 +135,10 @@ describe('footer', () => {
     expect(row.some(s => s.chip)).toBe(false)
     for (const t of ['ctx ', '5%', '5h ', '62%', '7d ', '45%']) expect(row.find(s => s.text === t)?.tone).toBe('muted')
     expect(row.find(s => /^━+$/.test(s.text))?.tone).toBe('accent')
-    expect(row[0]).toEqual({ text: 'OPUS 5.5', tone: 'text', bold: true })
-    expect(row[row.length - 1]).toEqual({ text: 'high', tone: 'accent' })
+    // The two ends are what a click acts on.
+    expect(row[0]).toEqual({ text: 'OPUS 5.5', tone: 'text', bold: true, press: 'model' })
+    expect(row[row.length - 1]).toEqual({ text: 'high', tone: 'accent', press: 'effort' })
+    expect(row.filter(s => s.press).length).toBe(2)
   })
 
   test('from 75% a reading is plain and bold; from 90% a red chip, its label, bar and reset red too', () => {
