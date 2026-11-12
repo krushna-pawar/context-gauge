@@ -1,16 +1,20 @@
 import { describe, expect, test } from 'claude-code/testing'
-import type { RenderSurface } from 'claude-code'
 
 import {
   bar,
-  buildCard,
+  fmtClock,
   fmtIn,
   fmtModel,
   fmtMode,
   fmtTokens,
+  footer,
+  isZone,
+  FOOTER_DEFAULTS,
   rail,
   rowText,
   type CardInput,
+  type FooterOptions,
+  type Row,
 } from '../hooks/format'
 
 const FULL: CardInput = {
@@ -35,14 +39,6 @@ const EMPTY: CardInput = {
   ctxPercent: null,
   limits: [],
 }
-
-const lines = (input: CardInput, columns: number) => {
-  const card = buildCard(input, columns)
-  return { card, text: rowText(card.row) }
-}
-
-const barCells = (input: CardInput, columns: number) =>
-  buildCard(input, columns).row.filter(seg => /^━+$/.test(seg.text)).reduce((n, seg) => n + seg.text.length, 0)
 
 describe('formatters', () => {
   test('tokens', () => {
@@ -86,143 +82,126 @@ describe('formatters', () => {
   })
 })
 
-describe('rail', () => {
-  test('one row, full width, every value in order', () => {
-    const { card, text } = lines(FULL, 160)
-    expect(card.width).toBe(160)
-    expect(text.length).toBe(card.inner)
-    expect(text).toMatch(/^OPUS 5\.5  \|  CTX ━+  42%   84\.1k \/ 200k  \|  5H ━+  31%  \|  7D ━+  12%  \|  HIGH \/ DEFAULT$/)
+describe('footer', () => {
+  const now = Date.parse('2026-10-17T12:00:00Z')
+  const at = (minutes: number) => new Date(now + minutes * 60_000).toISOString()
+  const limits = (five: number, resetsIn = 52) => [
+    { kind: 'five_hour', percentUsed: five, resetsAt: at(resetsIn) },
+    { kind: 'seven_day', percentUsed: 45, resetsAt: at(3 * 24 * 60) },
+  ]
+  // Calm: nothing is near a limit. Filling: the 5h window has passed 75%.
+  const CALM: CardInput = { ...FULL, ctxPercent: 5, limits: limits(62) }
+  const FILLING: CardInput = { ...CALM, limits: limits(78) }
+  const clock = fmtClock(at(52), true)!
+  // A 12-hour clock in the machine's own zone, which is not UTC: what a person's laptop has.
+  const LOCAL: FooterOptions = { ...FOOTER_DEFAULTS, hour12: true, timeZone: '', utc: false }
+  // The footer as drawn: its groups two cells apart; and as one flat row of segments.
+  const drawn = (groups: Row[]) => groups.map(rowText).join('  ')
+  const text = (input: CardInput, room: number, o: Partial<FooterOptions> = {}) => drawn(footer(input, room, now, { ...LOCAL, ...o }))
+  const segs = (input: CardInput, o: Partial<FooterOptions> = {}) => footer(input, 200, now, { ...LOCAL, ...o }).flat()
+
+  test('calm: one row of the model and three readings; only the context has a bar, and nothing says when 5h resets', () => {
+    expect(text(CALM, 200)).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 62%  7d 45%')
+    expect(text(CALM, 200).match(/━/g)?.length).toBe(6)
   })
 
-  test('every filled bar is accent, never another tone', () => {
-    const fills = buildCard({ ...FULL, ctxPercent: 95, limits: [{ kind: 'five_hour', percentUsed: 90 }, { kind: 'seven_day', percentUsed: 50 }] }, 120)
-      .row.filter(s => /^━+$/.test(s.text))
-    expect(fills.map(s => s.tone)).toEqual(['accent', 'track', 'accent', 'track', 'accent', 'track'])
+  test('from 75% 5h says when it resets: how long from now, then the time of day; 7d never does', () => {
+    expect(text(FILLING, 200)).toBe(`OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52 at ${clock}  7d 45%`)
+    const week = { ...CALM, limits: [{ kind: 'five_hour', percentUsed: 10, resetsAt: at(52) }, { kind: 'seven_day', percentUsed: 99, resetsAt: at(90) }] }
+    expect(text(week, 200)).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 10%  7d 99%')
   })
 
-  test('bars grow with the width and the context bar is the longest', () => {
-    expect(barCells(FULL, 200) > barCells(FULL, 120)).toBe(true)
-    const row = buildCard(FULL, 140).row
-    const bars: number[] = []
-    let run = 0
-    for (const s of row) {
-      if (/^━+$/.test(s.text)) run += s.text.length
-      else if (run > 0) (bars.push(run), (run = 0))
-    }
-    expect(bars.length).toBe(3)
-    expect(bars[0]! > bars[1]!).toBe(true)
-    expect(bars[0]! > bars[2]!).toBe(true)
+  test('narrowing drops the reset\'s time of day, the model, the bar, the countdown, 7d, then 5h, then everything', () => {
+    const steps = [
+      `OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52 at ${clock}  7d 45%`,
+      'OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%',
+      'ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%',
+      'ctx 5%  5h 78% resets in 0:52  7d 45%',
+      'ctx 5%  5h 78%  7d 45%',
+      'ctx 5%  5h 78%',
+      'ctx 5%',
+    ]
+    steps.forEach((want, i) => {
+      expect(text(FILLING, want.length)).toBe(want)
+      expect(text(FILLING, want.length - 1)).toBe(steps[i + 1] ?? '')
+    })
+    for (let room = 0; room <= 120; room++) expect(text(FILLING, room).length <= room).toBe(true)
   })
 
-  test('never wider than the inner width; bars fill it exactly, and without them less than a gap per separator is left', () => {
-    for (const columns of [240, 160, 120, 100, 80, 76, 64, 52, 44, 36, 32, 24]) {
-      const { card, text } = lines(FULL, columns)
-      expect(text.length <= card.inner).toBe(true)
-      if (card.fit.bars) expect(text.length).toBe(card.inner)
-      // Four separators, each widened on both sides alike: at most 7 cells can't be shared out.
-      else if (columns >= 52) expect(card.inner - text.length < 8).toBe(true)
-    }
+  test('the reset as a time of day, on a 12- or 24-hour clock', () => {
+    const local = (h: number, m: number) => new Date(2026, 9, 17, h, m).toISOString()
+    expect(fmtClock(local(15, 40), true)).toBe('3:40pm')
+    expect(fmtClock(local(15, 40), false)).toBe('15:40')
+    expect(fmtClock(local(0, 5), true)).toBe('12:05am')
+    expect(fmtClock(local(0, 5), false)).toBe('00:05')
+    expect(fmtClock(local(12, 0), true)).toBe('12:00pm')
+    expect(fmtClock('not a date', true)).toBe(null)
+    expect(text(FILLING, 200, { hour12: false })).toContain(`resets in 0:52 at ${fmtClock(at(52), false)}  7d`)
   })
 
-  test('separators are ASCII: a box-drawing │ spills below its cell and leaves dots in Terminal.app', () => {
-    for (const columns of [200, 100, 64, 48]) expect(lines(FULL, columns).text).not.toMatch(/[│┃]/)
+  test('the reset in a chosen time zone; a machine on UTC says so unless a zone is chosen', () => {
+    // 12:52 UTC.
+    expect(fmtClock(at(52), true, 'Asia/Kolkata')).toBe('6:22pm')
+    expect(fmtClock(at(52), false, 'America/Los_Angeles')).toBe('05:52')
+    expect(fmtClock(at(52), true, 'Not/AZone')).toBe(clock)
+    expect(isZone('Asia/Kolkata')).toBe(true)
+    expect(isZone('Not/AZone')).toBe(false)
+    expect(text(FILLING, 200, { timeZone: 'Asia/Kolkata' })).toContain('resets in 0:52 at 6:22pm  7d')
+    expect(text(FILLING, 200, { utc: true })).toContain(`resets in 0:52 at ${clock} UTC  7d`)
+    expect(text(FILLING, 200, { utc: true, timeZone: 'Asia/Kolkata' })).toContain('at 6:22pm  7d')
   })
 
-  test('without bars, every separator is spaced the same', () => {
-    for (let columns = 40; columns <= 80; columns++) {
-      const { card, text } = lines(FULL, columns)
-      if (card.fit.bars) continue
-      expect(new Set(text.match(/ *\| */g)).size).toBe(1)
-    }
+  test('no reset once it is past or without a clock', () => {
+    expect(drawn(footer(FILLING, 200))).not.toContain('resets')
+    expect(text({ ...FILLING, limits: limits(78, -1) }, 200)).toContain('5h 78%  7d')
   })
 
-  test('without bars, a full gauge still has a space after its label', () => {
-    const t = lines({ ...FULL, ctxPercent: 100, limits: [{ kind: 'five_hour', percentUsed: 100 }] }, 64).text
-    expect(t).toContain('CTX 100%')
-    expect(t).toContain('5H 100%')
-    expect(lines(FULL, 64).text).toContain('CTX 42%')
+  test('quiet below 75%: every reading is muted and plain; only what a click acts on is Claude orange', () => {
+    const row = segs(CALM)
+    for (const t of ['ctx ', '5%', '5h ', '62%', '7d ', '45%']) expect(row.find(s => s.text === t)?.tone).toBe('muted')
+    expect(row.some(s => s.bold)).toBe(false)
+    expect(row.find(s => /^━+$/.test(s.text))?.tone).toBe('accent')
+    // A click on the model opens its picker.
+    expect(row[0]).toEqual({ text: 'OPUS 5.5', tone: 'accent', press: 'model' })
+    expect(segs(EMPTY)[0]).toEqual({ text: '—', tone: 'muted', press: 'model' })
+    expect(row.filter(s => s.press).length).toBe(1)
   })
 
-  test('narrowing drops token counts, then bars, keeping percentages and the right block', () => {
-    const mid = lines(FULL, 80).text
-    expect(mid).not.toContain('84.1k')
-    expect(mid).toContain('━')
-    const small = lines(FULL, 64).text
-    expect(small).not.toContain('━')
-    expect(small).toContain('42%')
-    expect(small).not.toMatch(/ {6}/)
-    expect(small.endsWith('HIGH / DEFAULT')).toBe(true)
-    expect(lines({ ...FULL, mode: 'auto' }, 48).text.endsWith('HIGH / AUTO')).toBe(true)
+  test('from 75% a percentage is plain and bold; from 95% Claude orange; never red', () => {
+    const filling = segs(FILLING)
+    expect(filling.find(s => s.text === '78%')).toEqual({ text: '78%', tone: 'text', bold: true })
+    expect(filling.find(s => s.text === '5h ')?.tone).toBe('text')
+    expect(filling.find(s => s.text.startsWith(' resets'))?.tone).toBe('muted')
+
+    const near = segs({ ...CALM, ctxPercent: 97, limits: limits(94.9) })
+    expect(near.find(s => s.text === '94%')).toEqual({ text: '94%', tone: 'text', bold: true })
+    expect(near.find(s => s.text === '97%')).toEqual({ text: '97%', tone: 'accent', bold: true })
+    const full = segs({ ...CALM, limits: limits(95) })
+    expect(full.find(s => s.text === '95%')).toEqual({ text: '95%', tone: 'accent', bold: true })
+    for (const row of [filling, near, full]) expect(row.some(s => s.tone === 'critical')).toBe(false)
+  })
+
+  test('settings: each part can be turned off, the effort on, and both thresholds moved', () => {
+    expect(text(CALM, 200, { model: false })).toBe('ctx ━━━━━━ 5%  5h 62%  7d 45%')
+    expect(text(CALM, 200, { week: false })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 62%')
+    expect(text(FILLING, 200, { clock: false })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%')
+    expect(text(CALM, 200, { effort: true })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 62%  7d 45%  high')
+    const effort = segs(CALM, { effort: true })
+    expect(effort[effort.length - 1]).toEqual({ text: 'high', tone: 'accent', press: 'effort' })
+    expect(text(CALM, 200, { noticeAt: 50 })).toContain('5h 62% resets in 0:52')
+    const moved = segs(CALM, { noticeAt: 50, alertAt: 60 })
+    expect(moved.find(s => s.text === '62%')).toEqual({ text: '62%', tone: 'accent', bold: true })
+    expect(moved.find(s => s.text === '45%')?.tone).toBe('muted')
+    expect(text(CALM, 200, { week: false, model: false })).toBe('ctx ━━━━━━ 5%  5h 62%')
   })
 
   test('missing data shows a dash, never a guess', () => {
-    const { text } = lines(EMPTY, 160)
-    expect(text.startsWith('—  |  CTX ')).toBe(true)
-    expect(text).toContain('— / —')
-    expect(text).not.toContain('%')
-    expect(text.endsWith('— / —')).toBe(true)
-    expect(buildCard(EMPTY, 160).row.some(s => s.tone === 'accent' && /━/.test(s.text))).toBe(false)
-  })
-
-  test('window known before the first response', () => {
-    expect(lines({ ...EMPTY, ctxWindow: 200_000 }, 160).text).toContain('— / 200k')
-  })
-
-  test('no subscription windows: 5H and 7D show a dash', () => {
-    const t = lines({ ...FULL, limits: [{ kind: 'spend_limit', percentUsed: 50 }] }, 160).text
-    expect(t).toMatch(/5H ━+ +—  \|  7D ━+ +—  \|/)
-  })
-
-  test('mode names are shown as words, upper-cased', () => {
-    expect(lines({ ...FULL, mode: 'acceptEdits' }, 160).text.endsWith('HIGH / ACCEPT EDITS')).toBe(true)
-    expect(lines({ ...FULL, mode: 'auto' }, 160).text.endsWith('HIGH / AUTO')).toBe(true)
-  })
-
-  test('90% and over marks the digits critical; below that they stay plain', () => {
-    const row = buildCard({ ...FULL, ctxPercent: 69, limits: [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 70 }] }, 160).row
-    expect(row.find(s => s.text === '93%')?.tone).toBe('critical')
-    expect(row.find(s => s.text === '70%')?.tone).toBe('text')
-    expect(row.find(s => s.text === '69%')?.tone).toBe('text')
-  })
-
-  test('reset countdown: rounded up to the minute, gone once past or without a clock', () => {
-    const now = Date.parse('2026-10-17T12:00:00Z')
-    const at = (ms: number) => new Date(now + ms).toISOString()
-    expect(fmtIn(at(30_000), now)).toBe('0:01')
-    expect(fmtIn(at(42 * 60_000), now)).toBe('0:42')
-    expect(fmtIn(at(80 * 60_000), now)).toBe('1:20')
-    expect(fmtIn(at((3 * 24 + 4) * 3_600_000), now)).toBe('76:00')
-    expect(fmtIn(at(0), now)).toBe(null)
-    expect(fmtIn('not a date', now)).toBe(null)
-    const s = { ...FULL, limits: [{ kind: 'five_hour', percentUsed: 31, resetsAt: at(80 * 60_000) }] }
-    expect(lines(s, 160).text).not.toContain('↻')
-    expect(rowText(buildCard(s, 160, now).row)).toContain('31%  ↻ 1:20')
-  })
-
-  test('only 5H shows a reset countdown, never 7D', () => {
-    const now = Date.parse('2026-10-17T12:00:00Z')
-    const at = (ms: number) => new Date(now + ms).toISOString()
-    const s = {
-      ...FULL,
-      limits: [
-        { kind: 'five_hour', percentUsed: 31, resetsAt: at(80 * 60_000) },
-        { kind: 'seven_day', percentUsed: 12, resetsAt: at((3 * 24 + 4) * 3_600_000) },
-      ],
-    }
-    const t = rowText(buildCard(s, 160, now).row)
-    expect(t).toContain('31%  ↻ 1:20')
-    expect(t).toMatch(/7D ━+  12%  \|/)
-    expect(t).not.toContain('76:00')
-  })
-
-  test('flex surfaces drop tokens where the terminal keeps them beside short bars', () => {
-    expect(buildCard(FULL, 95).fit.tokens).toBe(true)
-    const r = rail(FULL, 'desktop', 95)
-    expect(r.surface === 'flex' && rowText(r.gauges[0]!.tail)).toBe('')
+    expect(text(EMPTY, 200)).toBe('—  ctx ━━━━━━ —  5h —  7d —')
+    expect(text(EMPTY, 200, { effort: true })).toBe('—  ctx ━━━━━━ —  5h —  7d —  —')
   })
 })
 
-describe('rail() on a flex surface', () => {
+describe('rail(): the card on the desktop, VS Code and mobile', () => {
   const now = Date.parse('2026-10-17T12:00:00Z')
   const at = (minutes: number) => new Date(now + minutes * 60_000).toISOString()
   const S: CardInput = {
@@ -235,21 +214,10 @@ describe('rail() on a flex surface', () => {
       { kind: 'seven_day', percentUsed: 7, resetsAt: at(3 * 24 * 60 + 240) },
     ],
   }
-  const flex = (input: CardInput, columns: number, surface: RenderSurface = 'desktop') => {
-    const r = rail(input, surface, columns, now)
-    if (r.surface !== 'flex') throw new Error(`expected a flex rail, got ${r.surface}`)
-    return r
-  }
+  const flex = (input: CardInput, columns: number) => rail(input, columns, now)
   const tails = (r: ReturnType<typeof flex>) => r.gauges.map(g => rowText(g.tail))
-  const terminal = (input: CardInput, columns: number) => {
-    const r = rail(input, 'terminal', columns, now)
-    if (r.surface !== 'terminal') throw new Error(`expected a terminal rail, got ${r.surface}`)
-    return rowText(r.row)
-  }
 
-  test('the terminal gets its row; every other surface gets the parts to lay out', () => {
-    expect(rail(S, 'terminal', 120, now).surface).toBe('terminal')
-    for (const surface of ['desktop', 'vscode', 'mobile'] as const) expect(rail(S, surface, 120, now).surface).toBe('flex')
+  test('the parts to lay out', () => {
     const r = flex(S, 120)
     expect(r.paddingX).toBe(2)
     expect(r.gauges.map(g => g.label.text)).toEqual(['CTX', '5H', '7D'])
@@ -262,7 +230,7 @@ describe('rail() on a flex surface', () => {
     expect(flex({ ...S, ctxPercent: 150 }, 130).gauges[0]!.fill).toBe(100)
   })
 
-  test('one gap everywhere: the terminal spacing, never none', () => {
+  test('one gap everywhere, never none', () => {
     expect(flex(S, 160).gap).toBe(2)
     expect(flex(S, 90).gap).toBe(1)
     expect(flex(S, 64).gap).toBe(1)
@@ -271,19 +239,15 @@ describe('rail() on a flex surface', () => {
   // Columns are the code font's, so they never decide which gauges a flex surface gets: at 43
   // the desktop had room for 7D with a third of the card empty, and it was hidden.
   test('every gauge and both ends at any width: what fits is the surface layout\'s call', () => {
-    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
-      for (const columns of [400, 160, 90, 64, 50, 43, 24, 4]) {
-        const r = rail(FULL, surface, columns, now)
-        expect(r.surface).toBe('flex')
-        if (r.surface !== 'flex') continue
-        expect(r.gauges.map(g => g.label.text)).toEqual(['CTX', '5H', '7D'])
-        expect(r.left.text).toBe('OPUS 5.5')
-        expect(rowText(r.right)).toBe('HIGH / DEFAULT')
-      }
+    for (const columns of [400, 160, 90, 64, 50, 43, 24, 4]) {
+      const r = flex(FULL, columns)
+      expect(r.gauges.map(g => g.label.text)).toEqual(['CTX', '5H', '7D'])
+      expect(r.left.text).toBe('OPUS 5.5')
+      expect(rowText(r.right)).toBe('HIGH / DEFAULT')
     }
   })
 
-  test('a flex surface keeps its bars unless its columns say it is narrow, and then stacks', () => {
+  test('keeps its bars unless its columns say it is narrow, and then stacks', () => {
     expect(flex(FULL, 120).bars).toBe(true)
     expect(flex(FULL, 120).stacked).toBe(false)
     // A 700px desktop card counted 64.
@@ -294,30 +258,40 @@ describe('rail() on a flex surface', () => {
     expect(flex(FULL, 30).gauges.length).toBe(3)
   })
 
-  // Seen in VS Code's terminal, 32 columns wide: `OPUS 5.5|CTX  —|5H 68%|7D 1…`.
-  test('a narrow terminal drops the spaces, then 7D, then shortens the effort, then drops 5H, before … cuts anything', () => {
-    const m: CardInput = { ...FULL, effort: 'medium', mode: 'auto' }
-    const narrow = (columns: number) => rowText(buildCard(m, columns, now).row)
-    expect(narrow(48)).toBe('OPUS 5.5|CTX 42%|5H 31%|7D 12%|MEDIUM / AUTO')
-    expect(narrow(41)).toBe('OPUS 5.5|CTX 42%|5H 31%|MEDIUM / AUTO')
-    expect(narrow(38)).toBe('OPUS 5.5|CTX 42%|5H 31%|MED / AUTO')
-    expect(narrow(31)).toBe('OPUS 5.5|CTX 42%|MED / AUTO')
-    expect(narrow(20).endsWith('…')).toBe(true)
-    for (let columns = 8; columns <= 60; columns++) expect(narrow(columns).length <= buildCard(m, columns, now).inner).toBe(true)
+  test('drops tokens, then the reset time, before its bars get short', () => {
+    expect(tails(flex(S, 130))).toEqual(['84.1k / 1.0M', '↻ 1:20', ''])
+    expect(tails(flex(S, 90))).toEqual(['', '↻ 1:20', ''])
+    expect(tails(flex(S, 74))).toEqual(['', '', ''])
   })
 
-  test('drops tokens, then the reset time, before its bars get short', () => {
-    const wide = flex(S, 130)
-    expect(tails(wide)).toEqual(['84.1k / 1.0M', '↻ 1:20', ''])
+  test('only 5H shows a reset countdown, never 7D, and none without a clock', () => {
+    expect(tails(flex(S, 160))[2]).toBe('')
+    expect(tails(rail(S, 160))).toEqual(['84.1k / 1.0M', '', ''])
+  })
 
-    // Where the terminal would still squeeze tokens in beside short bars, the desktop gives them up
-    // but keeps the 5H countdown, which the terminal drops along with the tokens.
-    expect(terminal(S, 90)).toContain('84.1k')
-    const mid = flex(S, 90)
-    expect(tails(mid)).toEqual(['', '↻ 1:20', ''])
-    expect(terminal(S, 80)).not.toContain('↻')
+  test('missing data shows a dash; the window is known before the first response', () => {
+    const r = flex(EMPTY, 160)
+    expect(r.left.text).toBe('—')
+    expect(r.gauges.map(g => g.pct.text)).toEqual(['—', '—', '—'])
+    expect(rowText(r.right)).toBe('— / —')
+    expect(tails(flex({ ...EMPTY, ctxWindow: 200_000 }, 160))[0]).toBe('— / 200k')
+  })
 
-    const narrow = flex(S, 74)
-    expect(tails(narrow)).toEqual(['', '', ''])
+  test('mode names are shown as words, upper-cased', () => {
+    expect(rowText(flex({ ...FULL, mode: 'acceptEdits' }, 120).right)).toBe('HIGH / ACCEPT EDITS')
+  })
+
+  test('90% and over marks the digits critical; below that they stay plain', () => {
+    const r = flex({ ...FULL, ctxPercent: 69, limits: [{ kind: 'five_hour', percentUsed: 93 }, { kind: 'seven_day', percentUsed: 70 }] }, 160)
+    expect(r.gauges.map(g => g.pct.tone)).toEqual(['text', 'critical', 'text'])
+  })
+
+  test('reset countdown: rounded up to the minute, gone once past', () => {
+    expect(fmtIn(at(0.5), now)).toBe('0:01')
+    expect(fmtIn(at(42), now)).toBe('0:42')
+    expect(fmtIn(at(80), now)).toBe('1:20')
+    expect(fmtIn(at((3 * 24 + 4) * 60), now)).toBe('76:00')
+    expect(fmtIn(at(0), now)).toBe(null)
+    expect(fmtIn('not a date', now)).toBe(null)
   })
 })

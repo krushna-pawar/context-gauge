@@ -1,12 +1,67 @@
 {
   "name": "context-gauge",
-  "version": "0.5.9",
-  "description": "A one-line card above the Claude Code prompt: model, context window, 5h/7d usage, effort and mode.",
+  "version": "0.9.0",
+  "description": "Model, context window and 5h/7d usage beside the Claude Code prompt: one quiet line under it in the terminal, a card above it on the desktop.",
   "types": "./types/index.d.ts",
   "author": {
     "name": "Krushna Pawar",
     "url": "https://github.com/krushna-pawar"
   },
   "repository": "https://github.com/krushna-pawar/context-gauge",
-  "license": "MIT"
+  "license": "MIT",
+  "userConfig": {
+    "showModel": {
+      "type": "boolean",
+      "title": "Show the model",
+      "description": "Terminal line: show the model name. Click it to open the model picker.",
+      "default": true
+    },
+    "showEffort": {
+      "type": "boolean",
+      "title": "Show the effort",
+      "description": "Terminal line: show the effort level. Click it to open the effort picker.",
+      "default": false
+    },
+    "showWeek": {
+      "type": "boolean",
+      "title": "Show the 7-day limit",
+      "description": "Terminal line: show how much of the 7-day limit is used.",
+      "default": true
+    },
+    "showResetClock": {
+      "type": "boolean",
+      "title": "Show the reset's time of day",
+      "description": "Terminal line: after how long until the 5-hour limit resets, also say at what time.",
+      "default": true
+    },
+    "noticeAt": {
+      "type": "number",
+      "title": "Notice from (%)",
+      "description": "Terminal line: from this percentage a reading turns from grey to bold, and 5h says when it resets.",
+      "default": 75
+    },
+    "alertAt": {
+      "type": "number",
+      "title": "Alert from (%)",
+      "description": "Terminal line: from this percentage a reading turns Claude orange.",
+      "default": 95
+    },
+    "clockStyle": {
+      "type": "string",
+      "title": "Clock style",
+      "description": "Terminal line: tell the reset's time of day on a 12-hour or 24-hour clock. Auto follows the machine Claude Code runs on.",
+      "default": "auto",
+      "options": [
+        "auto",
+        "12-hour",
+        "24-hour"
+      ]
+    },
+    "timeZone": {
+      "type": "string",
+      "title": "Time zone",
+      "description": "Terminal line: the time zone for the reset's time of day, as an IANA name such as Asia/Kolkata. Leave empty to use the machine Claude Code runs on.",
+      "default": ""
+    }
+  }
 }
