@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage, Timer } from 'claude-code'
 
 import type { Snap } from '../types'
-import { footer, rail, type Row, type Seg, type Tone } from './format'
+import { footer, FOOTER_DEFAULTS, rail, type FooterOptions, type Row, type Seg, type Tone } from './format'
 
 // Theme keys, not fixed colors, so the gauges read on light themes as well as dark ones.
 const COLORS: Record<Tone, string> = {
@@ -18,9 +18,14 @@ const BAR_HEIGHT = 0.25
 // The shortest bar worth drawing, in cells: shorter reads as a dot.
 const BAR_MIN = 4
 // The terminal's footer shares its row with Claude Code's own hint at the left, whose length the
-// engine does not report: this many cells are left for it. Where its hint is longer, the engine
+// engine does not report. These are the cells of that hint at its shortest in each permission
+// mode, its indent included (`  ⏸ manual mode on · ? for shortcuts`); the footer keeps clear of
+// them. Where the hint is longer, or the mode has moved since the last prompt, the engine
 // shortens the hint itself.
-const FOOTER_RESERVE = 42
+const HINT_CELLS: Record<string, number> = { default: 37, acceptEdits: 41, plan: 37, auto: 38, bypassPermissions: 47 }
+const HINT_CELLS_UNKNOWN = 41
+// The least room between the hint and the footer.
+const FOOTER_GAP = 2
 // The columns assumed where the terminal has not measured yet.
 const FOOTER_COLUMNS = 80
 
@@ -76,7 +81,20 @@ const noteMode = async ($: EngineInterface, e: { agent_id?: string; permission_m
 // Redraws once a minute so the reset countdowns stay current; one per loaded module.
 let tick: Timer | undefined
 
-export const register: Register = on => {
+const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback)
+// A threshold in percent: anything else, as a number out of range, falls back.
+const pct = (v: unknown, fallback: number) => (typeof v === 'number' && v >= 0 && v <= 100 ? v : fallback)
+
+export const register: Register = (on, options) => {
+  const shown: FooterOptions = {
+    model: bool(options?.showModel, FOOTER_DEFAULTS.model),
+    effort: bool(options?.showEffort, FOOTER_DEFAULTS.effort),
+    week: bool(options?.showWeek, FOOTER_DEFAULTS.week),
+    clock: bool(options?.showResetClock, FOOTER_DEFAULTS.clock),
+    noticeAt: pct(options?.noticeAt, FOOTER_DEFAULTS.noticeAt),
+    alertAt: pct(options?.alertAt, FOOTER_DEFAULTS.alertAt),
+  }
+
   on('session.start', async ($, e, next) => {
     tick ??= $.clock.every(60_000, () => $.ui.invalidate('ui.render'))
     const [name, usage, set] = await Promise.all([model($), $.session.usage().catch(() => null), settings($)])
@@ -140,26 +158,28 @@ export const register: Register = on => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const s = await read($, snap)
     const modes = e.props.modes.join(' & ')
-    const room = (e.viewport?.columns ?? FOOTER_COLUMNS) - FOOTER_RESERVE - (modes ? modes.length + 3 : 0)
-    const row = footer({ ...EMPTY, ...s }, room, await $.clock.now())
+    const hint = (s?.mode ? HINT_CELLS[s.mode] : undefined) ?? HINT_CELLS_UNKNOWN
+    const room = (e.viewport?.columns ?? FOOTER_COLUMNS) - hint - FOOTER_GAP - (modes ? modes.length + 2 : 0)
+    const row = footer({ ...EMPTY, ...s }, room, await $.clock.now(), shown)
     if (!row.length) return next(e)
 
     // The model and the effort are Buttons: a click opens Claude Code's own picker for it, as
     // /model and /effort do. Between them, runs of plain spans are one Text each. The spaces at a
-    // run's ends would be dropped where it meets a Button, so the Box's gap stands in for them.
+    // run's ends would be dropped where it meets a Button, so a Box of two cells stands in for
+    // the gap between groups.
     const span = (part: Seg, key: string) => (
       <Text key={key} color={COLORS[part.tone]} bold={part.bold}>
         {part.text}
       </Text>
     )
     const items: Seg[][] = []
-    for (const part of modes ? [...row, { text: ` · ${modes}`, tone: 'muted' as const }] : row) {
+    for (const part of modes ? [...row, { text: `  ${modes}`, tone: 'muted' as const }] : row) {
       const last = items[items.length - 1]
       if (part.press || !last || last[0]!.press) items.push([part])
       else last.push(part)
     }
     return (
-      <Box flexDirection="row" columnGap={1}>
+      <Box flexDirection="row" columnGap={2}>
         {items.map((run, i) => {
           const press = run[0]!.press
           if (press) {

@@ -1,14 +1,14 @@
 # context-gauge
 
-A Claude Code mod that shows the model, context window, usage limits and effort beside the prompt.
+A Claude Code mod that shows the model, context window and usage limits beside the prompt.
 
 **In the terminal**: one line under the prompt, at the right of Claude Code's own hint row. It adds
 no rows.
 
 ```
 ❯
-──────────────────────────────────────────────────────────────────────────────────────────────────────
-  ⏸ manual mode on · ? for shortcuts      OPUS 5.5 · ctx ━━━━━━ 5% · 5h 62% ↻ 1:20 → 3:40pm · 7d 45% · high
+────────────────────────────────────────────────────────────────────────────────────────────
+  ⏸ manual mode on · ? for shortcuts                 OPUS 5.5  ctx ━━━━━━ 5%  5h 62%  7d 45%
 ```
 
 **In the Claude desktop app** (and the VS Code panel): a one-line card above the prompt.
@@ -17,44 +17,60 @@ no rows.
 
 Both show:
 
-- **Model** in use
+- **Model** in use. In the terminal, click it to open Claude Code's model picker, the one `/model`
+  opens; the effort slider is in there too
 - **ctx**: how full the context window is, as a bar and a percentage (the card adds tokens used /
   window size)
-- **5h / 7d**: how much of your 5-hour and 7-day usage limits you've used (subscription plans).
-  5h also says when it resets: how long from now (`↻ 1:20`, hours:minutes) and, in the terminal,
-  at what time (`→ 3:40pm`, or `→ 15:40` on a 24-hour clock)
-- **Effort**: the current effort level. The card adds the permission mode; in the terminal Claude
-  Code's own hint beside the gauges already says it
+- **5h / 7d**: how much of your 5-hour and 7-day usage limits you've used (subscription plans)
+
+The card also shows the effort and the permission mode. The terminal line leaves the mode to
+Claude Code's own hint beside it, and shows the effort only if you turn it on (see Settings).
 
 Colors follow your Claude Code theme, so the gauges read on light themes as well as dark ones.
 
-In the terminal, click the model to open Claude Code's model picker, or the effort to open its
-effort picker: the same pickers `/model` and `/effort` open.
-
 ## Quiet until it matters
 
-In the terminal the readings are as grey as Claude Code's own hints, so they stay out of the way:
+In the terminal everything is as grey as Claude Code's own hints, so it stays out of the way:
+
+```
+OPUS 5.5  ctx ━━━━━━ 5%  5h 62%  7d 45%                            under 75%: grey
+OPUS 5.5  ctx ━━━━━━ 23%  5h 78% resets in 0:52 at 3:40pm  7d 47%  from 75%: bold, and 5h says when it resets
+OPUS 5.5  ctx ━━━━━━ 41%  5h 96% resets in 0:21 at 3:40pm  7d 58%  from 95%: Claude orange
+```
 
 - **Under 75%**: grey.
-- **From 75%**: that reading turns plain, its percentage bold.
-- **From 90%**: its percentage turns red, and so does the context bar's fill. Nothing else
-  changes: no block of color, so it doesn't nag once you already know.
+- **From 75%**: that reading turns plain, its percentage bold. 5h also says when it resets: how
+  long from now (hours:minutes) and at what time (`3:40pm`, or `15:40` on a 24-hour clock).
+- **From 95%**: its percentage turns Claude orange. No red and no block of color, so it doesn't
+  nag once you already know.
 
 On the card, percentages turn red at 90%.
 
+## Settings
+
+Run `/config` and look for context-gauge. All of these are for the terminal line:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Show the model | on | The model name, which opens the model picker on a click |
+| Show the effort | off | The effort level, which opens the effort picker on a click |
+| Show the 7-day limit | on | The 7d reading |
+| Show the reset's time of day | on | `at 3:40pm` after `resets in 0:52` |
+| Notice from (%) | 75 | Where a reading turns bold and 5h says when it resets |
+| Alert from (%) | 95 | Where a reading turns Claude orange |
+
 ## Narrow windows
 
-The terminal line never wraps and always leaves Claude Code's hint its room. As the window narrows
-it drops the reset's time of day first, then the model, then the bar and the effort, then the
-countdown, then 7d:
+The terminal line never wraps and keeps clear of Claude Code's hint. As the window narrows it
+drops the reset's time of day first, then the model, then the bar, then the countdown, then 7d:
 
 ```
-OPUS 5.5 · ctx ━━━━━━ 5% · 5h 62% ↻ 1:20 → 3:40pm · 7d 45% · high
-OPUS 5.5 · ctx ━━━━━━ 5% · 5h 62% ↻ 1:20 · 7d 45% · high
-ctx ━━━━━━ 5% · 5h 62% ↻ 1:20 · 7d 45% · high
-ctx 5% · 5h 62% ↻ 1:20 · 7d 45%
-ctx 5% · 5h 62% · 7d 45%
-ctx 5% · 5h 62%
+OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52 at 3:40pm  7d 45%
+OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%
+ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%
+ctx 5%  5h 78% resets in 0:52  7d 45%
+ctx 5%  5h 78%  7d 45%
+ctx 5%  5h 78%
 ```
 
 Narrower still, the row is left to Claude Code.
@@ -65,16 +81,17 @@ effort / mode, then the gauges without bars.
 
 ## Known limits
 
-- **Effort** shows `—` until Claude's first request in a session, unless it's saved in your
-  settings (`/effort` saves it).
 - **5h / 7d** show `—` until Claude Code has a reading, usually after the first request, and
   only on subscription plans.
+- **Effort** (where shown) is `—` until Claude's first request in a session, unless it's saved in
+  your settings (`/effort` saves it).
 - **Clicks** need a terminal that passes the mouse to Claude Code. During a turn, the picker opens
-  once the turn ends. On the narrowest fits the model and the effort are gone, so there is
-  nothing to click; `/model` and `/effort` still work.
-- **The terminal line** can't see how long Claude Code's hint beside it is, so it leaves 42
-  columns for it. Where the hint is longer, Claude Code shortens the hint.
-- **Mode after Shift+Tab** (the card only) updates with your next prompt or tool call: Claude Code
+  once the turn ends. Where the window is too narrow for the model, there is nothing to click;
+  `/model` still works.
+- **The terminal line** can't see how long Claude Code's hint beside it is. It leaves the room
+  that hint needs at its shortest in the current permission mode; where the hint is longer, or
+  you changed mode with Shift+Tab since your last prompt, Claude Code shortens its hint.
+- **Mode after Shift+Tab** (the card) updates with your next prompt or tool call: Claude Code
   raises no event for the key itself.
 - The `[-]` beside the card is Claude Code's own collapse button; the mod can't hide it.
 

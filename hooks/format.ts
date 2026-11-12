@@ -52,14 +52,14 @@ export const fmtMode = (mode: string | null) => (mode === null ? DASH : (MODES[m
 // How much of a bar to fill, in percent: none for no use, at least MIN_FILL for any.
 const fillPct = (pct: number | null) => (pct === null || pct <= 0 ? 0 : Math.min(100, Math.max(MIN_FILL, pct)))
 
-// Filled cells in Claude orange (or `fill`), the rest a dark track.
-export function bar(pct: number | null, width: number, fill: Tone = 'accent'): Seg[] {
+// Filled cells in Claude orange, the rest a dark track, whatever the percentage.
+export function bar(pct: number | null, width: number): Seg[] {
   if (width <= 0) return []
   if (pct === null) return [seg('━'.repeat(width), 'track')]
   // At least one cell for any use, the same rule fillPct gives the desktop's strip.
   const filled = fillPct(pct) === 0 ? 0 : Math.min(width, Math.max(1, Math.round((pct / 100) * width)))
   const out: Seg[] = []
-  if (filled > 0) out.push(seg('━'.repeat(filled), fill))
+  if (filled > 0) out.push(seg('━'.repeat(filled), 'accent'))
   if (filled < width) out.push(seg('━'.repeat(width - filled), 'track'))
   return out
 }
@@ -224,16 +224,22 @@ export function rail(s: CardInput, columns: number, now?: number): Rail {
 }
 
 // The terminal's footer line: the gauges at the right of the row under the prompt, beside
-// Claude Code's own mode hint. Quiet until it matters: a reading is grey below WARM, and from
-// there its percentage is bold: plain, then red from CRITICAL. Nothing louder: a red block
-// beside the prompt nagged someone already near a limit.
-const WARM = 75
-const DOT = ' · '
+// Claude Code's own mode hint. Quiet until it matters: a reading is grey below `noticeAt`, and
+// from there its percentage is bold: plain, then Claude orange from `alertAt`. Nothing louder: a
+// red block beside the prompt nagged someone already near a limit.
+//
+// Two spaces part the groups, not a ` · `: the engine's hint beside it is strung on those, and
+// the gauges should not read as more of it.
+const GAP = '  '
 const FOOTER_BAR = 6
 
-export type Level = 'calm' | 'warm' | 'critical'
-export const level = (pct: number | null): Level =>
-  pct === null || pct < WARM ? 'calm' : pct < CRITICAL ? 'warm' : 'critical'
+// What the person chose in /config: which parts show, and where a reading gets louder.
+export type FooterOptions = { model: boolean; effort: boolean; week: boolean; clock: boolean; noticeAt: number; alertAt: number }
+export const FOOTER_DEFAULTS: FooterOptions = { model: true, effort: false, week: true, clock: true, noticeAt: 75, alertAt: 95 }
+
+export type Level = 'calm' | 'notice' | 'alert'
+export const level = (pct: number | null, o: FooterOptions = FOOTER_DEFAULTS): Level =>
+  pct === null || pct < o.noticeAt ? 'calm' : pct < o.alertAt ? 'notice' : 'alert'
 
 // Whether this machine's locale tells the time on a 12-hour clock.
 export const HOUR12: boolean = (() => {
@@ -254,12 +260,12 @@ export function fmtClock(iso: string, hour12 = HOUR12): string | null {
 }
 
 // A label and its percentage at the reading's level, with a bar between them when `width` is given.
-function reading(label: string, pct: number | null, width: number | null = null): Row {
-  const lv = level(pct)
+function reading(label: string, pct: number | null, o: FooterOptions, width: number | null = null): Row {
+  const lv = level(pct, o)
   const text = pct === null ? DASH : `${Math.floor(pct)}%`
-  const strip = width === null ? [] : [...bar(pct, width, lv === 'critical' ? 'critical' : 'accent'), spaces(1)]
+  const strip = width === null ? [] : [...bar(pct, width), spaces(1)]
   if (lv === 'calm') return [seg(`${label} `, 'muted'), ...strip, seg(text, 'muted')]
-  return [seg(`${label} `), ...strip, { text, tone: lv === 'critical' ? 'critical' : 'text', bold: true }]
+  return [seg(`${label} `), ...strip, { text, tone: lv === 'alert' ? 'accent' : 'text', bold: true }]
 }
 
 // How much of the footer survives as its room narrows, roomiest first. `clock`: when the 5h
@@ -275,29 +281,32 @@ const FOOTER_FITS: FooterFit[] = [
   { model: false, bar: false, clock: false, countdown: false, effort: false, gauges: 2 },
 ]
 
-function footerAt(s: CardInput, fit: FooterFit, now: number | undefined, hour12: boolean): Row {
+function footerAt(s: CardInput, fit: FooterFit, o: FooterOptions, now: number | undefined, hour12: boolean): Row {
   const parts: Row[] = []
-  if (fit.model) parts.push([{ ...ends(s).left, press: 'model' }])
-  parts.push(reading('ctx', s.ctxPercent, fit.bar ? FOOTER_BAR : null))
-  for (const { kind, label, countdown } of WINDOWS.slice(0, fit.gauges - 1)) {
+  // Grey and plain: the model is the part least likely to change.
+  if (fit.model && o.model) parts.push([{ text: ends(s).left.text, tone: 'muted', press: 'model' }])
+  parts.push(reading('ctx', s.ctxPercent, o, fit.bar ? FOOTER_BAR : null))
+  for (const { kind, label, countdown } of WINDOWS.slice(0, (o.week ? fit.gauges : Math.min(fit.gauges, 2)) - 1)) {
     const limit = s.limits.find(l => l.kind === kind)
     const pct = limit?.percentUsed ?? null
-    const part = reading(label.toLowerCase(), pct)
-    const left = countdown && fit.countdown && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
+    const part = reading(label.toLowerCase(), pct, o)
+    // When it resets is only the question once the window is filling up.
+    const due = countdown && fit.countdown && level(pct, o) !== 'calm' && now !== undefined && limit?.resetsAt
+    const left = due ? fmtIn(limit!.resetsAt!, now!) : null
     if (left !== null) {
-      const at = fit.clock ? fmtClock(limit!.resetsAt!, hour12) : null
-      part.push(seg(` ↻ ${left}${at === null ? '' : ` → ${at}`}`, 'muted'))
+      const at = fit.clock && o.clock ? fmtClock(limit!.resetsAt!, hour12) : null
+      part.push(seg(` resets in ${left}${at === null ? '' : ` at ${at}`}`, 'muted'))
     }
     parts.push(part)
   }
-  if (fit.effort) parts.push([{ ...(s.effort === null ? seg(DASH, 'muted') : seg(s.effort, 'accent')), press: 'effort' }])
-  return parts.flatMap((part, i) => (i === 0 ? part : [seg(DOT, 'muted'), ...part]))
+  if (fit.effort && o.effort) parts.push([{ ...(s.effort === null ? seg(DASH, 'muted') : seg(s.effort, 'muted')), press: 'effort' }])
+  return parts.flatMap((part, i) => (i === 0 ? part : [seg(GAP, 'muted'), ...part]))
 }
 
 // The footer in `room` cells: the roomiest fit that fits, or nothing when none does.
-export function footer(s: CardInput, room: number, now?: number, hour12 = HOUR12): Row {
+export function footer(s: CardInput, room: number, now?: number, o: FooterOptions = FOOTER_DEFAULTS, hour12 = HOUR12): Row {
   for (const fit of FOOTER_FITS) {
-    const row = footerAt(s, fit, now, hour12)
+    const row = footerAt(s, fit, o, now, hour12)
     if (rowLength(row) <= room) return row
   }
   return []

@@ -8,9 +8,11 @@ import {
   fmtMode,
   fmtTokens,
   footer,
+  FOOTER_DEFAULTS,
   rail,
   rowText,
   type CardInput,
+  type FooterOptions,
 } from '../hooks/format'
 
 const FULL: CardInput = {
@@ -81,36 +83,42 @@ describe('formatters', () => {
 describe('footer', () => {
   const now = Date.parse('2026-10-17T12:00:00Z')
   const at = (minutes: number) => new Date(now + minutes * 60_000).toISOString()
-  const S: CardInput = {
-    ...FULL,
-    ctxPercent: 5,
-    limits: [
-      { kind: 'five_hour', percentUsed: 62, resetsAt: at(80) },
-      { kind: 'seven_day', percentUsed: 45, resetsAt: at(3 * 24 * 60) },
-    ],
-  }
-  const clock = fmtClock(at(80), true)!
-  const text = (input: CardInput, room: number) => rowText(footer(input, room, now, true))
-  const steps = [
-    `OPUS 5.5 · ctx ━━━━━━ 5% · 5h 62% ↻ 1:20 → ${clock} · 7d 45% · high`,
-    'OPUS 5.5 · ctx ━━━━━━ 5% · 5h 62% ↻ 1:20 · 7d 45% · high',
-    'ctx ━━━━━━ 5% · 5h 62% ↻ 1:20 · 7d 45% · high',
-    'ctx 5% · 5h 62% ↻ 1:20 · 7d 45%',
-    'ctx 5% · 5h 62% · 7d 45%',
-    'ctx 5% · 5h 62%',
+  const limits = (five: number, resetsIn = 52) => [
+    { kind: 'five_hour', percentUsed: five, resetsAt: at(resetsIn) },
+    { kind: 'seven_day', percentUsed: 45, resetsAt: at(3 * 24 * 60) },
   ]
+  // Calm: nothing is near a limit. Filling: the 5h window has passed 75%.
+  const CALM: CardInput = { ...FULL, ctxPercent: 5, limits: limits(62) }
+  const FILLING: CardInput = { ...CALM, limits: limits(78) }
+  const clock = fmtClock(at(52), true)!
+  const text = (input: CardInput, room: number, o: Partial<FooterOptions> = {}) =>
+    rowText(footer(input, room, now, { ...FOOTER_DEFAULTS, ...o }, true))
 
-  test('one row, every value in order: only the context has a bar, and 7d is a number with no reset', () => {
-    expect(text(S, 200)).toBe(steps[0]!)
-    expect(text(S, 200).match(/━/g)?.length).toBe(6)
+  test('calm: one row of the model and three readings; only the context has a bar, and nothing says when 5h resets', () => {
+    expect(text(CALM, 200)).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 62%  7d 45%')
+    expect(text(CALM, 200).match(/━/g)?.length).toBe(6)
   })
 
-  test('narrowing drops the reset\'s time of day, the model, the bar and effort, the countdown, then 7d, then everything', () => {
+  test('from 75% 5h says when it resets: how long from now, then the time of day; 7d never does', () => {
+    expect(text(FILLING, 200)).toBe(`OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52 at ${clock}  7d 45%`)
+    const week = { ...CALM, limits: [{ kind: 'five_hour', percentUsed: 10, resetsAt: at(52) }, { kind: 'seven_day', percentUsed: 99, resetsAt: at(90) }] }
+    expect(text(week, 200)).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 10%  7d 99%')
+  })
+
+  test('narrowing drops the reset\'s time of day, the model, the bar, the countdown, then 7d, then everything', () => {
+    const steps = [
+      `OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52 at ${clock}  7d 45%`,
+      'OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%',
+      'ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%',
+      'ctx 5%  5h 78% resets in 0:52  7d 45%',
+      'ctx 5%  5h 78%  7d 45%',
+      'ctx 5%  5h 78%',
+    ]
     steps.forEach((want, i) => {
-      expect(text(S, want.length)).toBe(want)
-      expect(text(S, want.length - 1)).toBe(steps[i + 1] ?? '')
+      expect(text(FILLING, want.length)).toBe(want)
+      expect(text(FILLING, want.length - 1)).toBe(steps[i + 1] ?? '')
     })
-    for (let room = 0; room <= 120; room++) expect(text(S, room).length <= room).toBe(true)
+    for (let room = 0; room <= 120; room++) expect(text(FILLING, room).length <= room).toBe(true)
   })
 
   test('the reset as a time of day, on a 12- or 24-hour clock', () => {
@@ -121,43 +129,54 @@ describe('footer', () => {
     expect(fmtClock(local(0, 5), false)).toBe('00:05')
     expect(fmtClock(local(12, 0), true)).toBe('12:00pm')
     expect(fmtClock('not a date', true)).toBe(null)
-    expect(rowText(footer(S, 200, now, false))).toContain(`↻ 1:20 → ${fmtClock(at(80), false)}`)
+    expect(rowText(footer(FILLING, 200, now, FOOTER_DEFAULTS, false))).toContain(`resets in 0:52 at ${fmtClock(at(52), false)}`)
   })
 
   test('no reset once it is past or without a clock', () => {
-    expect(rowText(footer(S, 200))).not.toContain('↻')
-    const past = { ...S, limits: [{ kind: 'five_hour', percentUsed: 62, resetsAt: at(-1) }] }
-    expect(text(past, 200)).toContain('5h 62% · 7d')
+    expect(rowText(footer(FILLING, 200))).not.toContain('resets')
+    expect(text({ ...FILLING, limits: limits(78, -1) }, 200)).toContain('5h 78%  7d')
   })
 
-  test('quiet below 75%: every reading is muted', () => {
-    const row = footer(S, 200, now, true)
-    for (const t of ['ctx ', '5%', '5h ', '62%', '7d ', '45%']) expect(row.find(s => s.text === t)?.tone).toBe('muted')
+  test('quiet below 75%: everything is muted and plain, the model too', () => {
+    const row = footer(CALM, 200, now, FOOTER_DEFAULTS, true)
+    for (const t of ['OPUS 5.5', 'ctx ', '5%', '5h ', '62%', '7d ', '45%']) expect(row.find(s => s.text === t)?.tone).toBe('muted')
+    expect(row.some(s => s.bold)).toBe(false)
     expect(row.find(s => /^━+$/.test(s.text))?.tone).toBe('accent')
-    // The two ends are what a click acts on.
-    expect(row[0]).toEqual({ text: 'OPUS 5.5', tone: 'text', bold: true, press: 'model' })
-    expect(row[row.length - 1]).toEqual({ text: 'high', tone: 'accent', press: 'effort' })
-    expect(row.filter(s => s.press).length).toBe(2)
+    // A click on the model opens its picker.
+    expect(row[0]).toEqual({ text: 'OPUS 5.5', tone: 'muted', press: 'model' })
+    expect(row.filter(s => s.press).length).toBe(1)
   })
 
-  test('from 75% a percentage is plain and bold; from 90% red and bold, and its bar red: nothing else changes', () => {
-    const warm = footer({ ...S, limits: [{ kind: 'five_hour', percentUsed: 78, resetsAt: at(52) }] }, 200, now, true)
-    expect(warm.find(s => s.text === '78%')).toEqual({ text: '78%', tone: 'text', bold: true })
-    expect(warm.find(s => s.text === '5h ')?.tone).toBe('text')
-    expect(warm.find(s => s.text.startsWith(' ↻'))?.tone).toBe('muted')
+  test('from 75% a percentage is plain and bold; from 95% Claude orange; never red', () => {
+    const filling = footer(FILLING, 200, now, FOOTER_DEFAULTS, true)
+    expect(filling.find(s => s.text === '78%')).toEqual({ text: '78%', tone: 'text', bold: true })
+    expect(filling.find(s => s.text === '5h ')?.tone).toBe('text')
+    expect(filling.find(s => s.text.startsWith(' resets'))?.tone).toBe('muted')
 
-    const hot = footer({ ...S, ctxPercent: 95, limits: [{ kind: 'five_hour', percentUsed: 93.6, resetsAt: at(21) }] }, 200, now, true)
-    expect(hot.find(s => s.text === '93%')).toEqual({ text: '93%', tone: 'critical', bold: true })
-    expect(hot.find(s => s.text === '5h ')?.tone).toBe('text')
-    expect(hot.find(s => s.text.startsWith(' ↻ 0:21'))?.tone).toBe('muted')
-    expect(hot.find(s => s.text === '95%')).toEqual({ text: '95%', tone: 'critical', bold: true })
-    expect(hot.find(s => /^━+$/.test(s.text))?.tone).toBe('critical')
-    // Only the two percentages and the context bar's fill are red.
-    expect(hot.filter(s => s.tone === 'critical').map(s => s.text)).toEqual(['━━━━━━', '95%', '93%'])
+    const near = footer({ ...CALM, ctxPercent: 97, limits: limits(94.9) }, 200, now, FOOTER_DEFAULTS, true)
+    expect(near.find(s => s.text === '94%')).toEqual({ text: '94%', tone: 'text', bold: true })
+    expect(near.find(s => s.text === '97%')).toEqual({ text: '97%', tone: 'accent', bold: true })
+    const full = footer({ ...CALM, limits: limits(95) }, 200, now, FOOTER_DEFAULTS, true)
+    expect(full.find(s => s.text === '95%')).toEqual({ text: '95%', tone: 'accent', bold: true })
+    for (const row of [filling, near, full]) expect(row.some(s => s.tone === 'critical')).toBe(false)
+  })
+
+  test('settings: each part can be turned off, the effort on, and both thresholds moved', () => {
+    expect(text(CALM, 200, { model: false })).toBe('ctx ━━━━━━ 5%  5h 62%  7d 45%')
+    expect(text(CALM, 200, { week: false })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 62%')
+    expect(text(FILLING, 200, { clock: false })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%')
+    expect(text(CALM, 200, { effort: true })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 62%  7d 45%  high')
+    const effort = footer(CALM, 200, now, { ...FOOTER_DEFAULTS, effort: true }, true)
+    expect(effort[effort.length - 1]).toEqual({ text: 'high', tone: 'muted', press: 'effort' })
+    expect(text(CALM, 200, { noticeAt: 50 })).toContain('5h 62% resets in 0:52')
+    const moved = footer(CALM, 200, now, { ...FOOTER_DEFAULTS, noticeAt: 50, alertAt: 60 }, true)
+    expect(moved.find(s => s.text === '62%')).toEqual({ text: '62%', tone: 'accent', bold: true })
+    expect(moved.find(s => s.text === '45%')?.tone).toBe('muted')
   })
 
   test('missing data shows a dash, never a guess', () => {
-    expect(text(EMPTY, 200)).toBe('— · ctx ━━━━━━ — · 5h — · 7d — · —')
+    expect(text(EMPTY, 200)).toBe('—  ctx ━━━━━━ —  5h —  7d —')
+    expect(text(EMPTY, 200, { effort: true })).toBe('—  ctx ━━━━━━ —  5h —  7d —  —')
   })
 })
 

@@ -33,8 +33,8 @@ const line = async ($: Engine, columns: number, modes: string[] = [], surface: '
   return tree.type === 'Box' ? (tree.children ?? []).map(flat).join(' '.repeat(tree.props?.columnGap as number)) : flat(tree as RenderNode)
 }
 
-// The cells the footer leaves for the engine's hint at its left.
-const RESERVE = 42
+// The cells the footer leaves for the engine's hint at its left, before the mode is known.
+const RESERVE = 43
 
 // What the engine itself answers beneath the plugin, for the events this test raises.
 // `settings` stands for the merged settings.json; `/effort` writes into it as it runs.
@@ -84,7 +84,7 @@ const engine = (on: On, settings: Record<string, unknown> = {}) => {
 describe('band', () => {
   test('before any data: the terminal draws one row of dashes under the prompt, and no card above it', async ($, on) => {
     engine(on)
-    expect(await line($, 150)).toBe('— · ctx ━━━━━━ — · 5h — · 7d — · —')
+    expect(await line($, 150)).toBe('—  ctx ━━━━━━ —  5h —  7d —')
     expect((await draw($, 150, {}, 'terminal')).text).toBe('no band')
   })
 
@@ -117,7 +117,7 @@ describe('band', () => {
       changed: ['context', 'rateLimits', 'cost'],
     })
 
-    expect(await line($, 150)).toBe('OPUS 5.5 · ctx ━━━━━━ 42% · 5h 31% · 7d 92% · high')
+    expect(await line($, 150)).toBe('OPUS 5.5  ctx ━━━━━━ 42%  5h 31%  7d 92%')
     const { text } = await draw($, 150, { isWorking: true })
     expect(text.startsWith('OPUS 5.5')).toBe(true)
     expect(text).toContain('84.1k / 200k')
@@ -143,7 +143,7 @@ describe('band', () => {
     await $.session.end({ reason: 'clear', sessionId: 's1' } as never)
     await $.session.start({ source: 'clear', cwd: '/work' } as never)
 
-    expect(await line($, 150)).toBe('OPUS 5.5 · ctx ━━━━━━ — · 5h 31% · 7d 92% · high')
+    expect(await line($, 150)).toBe('OPUS 5.5  ctx ━━━━━━ —  5h 31%  7d 92%')
     const { text } = await draw($, 150)
     expect(text).toContain('— / 200k')
     expect(text.endsWith('HIGH / PLAN')).toBe(true)
@@ -153,7 +153,22 @@ describe('band', () => {
     engine(on, { effortLevel: 'xhigh', permissions: { defaultMode: 'acceptEdits' } })
     await $.session.start({ source: 'startup', cwd: '/work' } as never)
     expect((await draw($, 150)).text.endsWith('XHIGH / ACCEPT EDITS')).toBe(true)
-    expect((await line($, 150)).endsWith(' · xhigh')).toBe(true)
+  })
+
+  test('terminal: the effort shows only where the person turned it on', { options: { showEffort: true } }, async ($, on) => {
+    engine(on, { effortLevel: 'xhigh' })
+    await $.session.start({ source: 'startup', cwd: '/work' } as never)
+    expect(await line($, 150)).toBe('OPUS 5.5  ctx ━━━━━━ —  5h —  7d —  xhigh')
+  })
+
+  test('terminal: settings turn parts off and move the thresholds', { options: { showModel: false, showWeek: false, noticeAt: 30 } }, async ($, on) => {
+    engine(on)
+    await $.session.measure({
+      context: { tokens: 5_000, window: 200_000, percent: 2 },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 31, resetsAt: new Date(NOW + 80 * 60_000).toISOString() }, { kind: 'seven_day', percentUsed: 92 }],
+      changed: ['context', 'rateLimits'],
+    } as never)
+    expect(await line($, 150)).toMatch(/^ctx ━━━━━━ 2%  5h 31% resets in 1:20 at \S+$/)
   })
 
   test('settings that are missing, unknown or unreadable leave a dash', async ($, on) => {
@@ -209,24 +224,42 @@ describe('band', () => {
 
   test('terminal: the engine\'s own mode labels follow the gauges', async ($, on) => {
     engine(on)
-    expect(await line($, 150, ['focus', 'memory paused'])).toBe('— · ctx ━━━━━━ — · 5h — · 7d — · — · focus & memory paused')
+    expect(await line($, 150, ['focus', 'memory paused'])).toBe('—  ctx ━━━━━━ —  5h —  7d —  focus & memory paused')
     // They take their share of the room: without them this width keeps every gauge.
-    expect(await line($, 80)).toBe('— · ctx ━━━━━━ — · 5h — · 7d — · —')
-    expect(await line($, 80, ['focus', 'memory paused'])).toBe('ctx — · 5h — · focus & memory paused')
+    expect(await line($, 80)).toBe('—  ctx ━━━━━━ —  5h —  7d —')
+    expect(await line($, 80, ['focus', 'memory paused'])).toBe('ctx —  5h —  focus & memory paused')
   })
 
-  test('terminal: a click on the model or the effort opens its picker, as /model and /effort do', async ($, on) => {
+  test('terminal: the room left for the engine\'s hint follows the permission mode', async ($, on) => {
+    engine(on)
+    // Unknown mode: the model does not fit beside the longest common hint.
+    expect(await line($, 67)).toBe('ctx ━━━━━━ —  5h —  7d —')
+    await $.classic.UserPromptSubmit({ prompt: 'hi', permission_mode: 'default' } as never)
+    expect(await line($, 67)).toBe('—  ctx ━━━━━━ —  5h —  7d —')
+    await $.classic.UserPromptSubmit({ prompt: 'hi', permission_mode: 'bypassPermissions' } as never)
+    expect(await line($, 67)).toBe('ctx —  5h —  7d —')
+  })
+
+  test('terminal: a click on the model opens its picker, as /model does', async ($, on) => {
+    engine(on)
+    const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 150, rows: 40 } })
+    expect((await ui.findAll({ type: 'Button' })).length).toBe(1)
+    await ui.press({ key: 'model' })
+    expect(ran).toEqual(['/model'])
+    await ui.unmount()
+  })
+
+  test('terminal: with the effort turned on, a click on it opens its picker too', { options: { showEffort: true } }, async ($, on) => {
     engine(on)
     const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 150, rows: 40 } })
     expect((await ui.findAll({ type: 'Button' })).length).toBe(2)
     await ui.press({ key: 'model' })
-    expect(ran).toEqual(['/model'])
     await ui.press({ key: 'effort' })
     expect(ran).toEqual(['/model', '/effort'])
     await ui.unmount()
   })
 
-  test('terminal: where the model and the effort no longer fit, nothing is left to click', async ($, on) => {
+  test('terminal: where the model no longer fits, nothing is left to click', async ($, on) => {
     engine(on)
     await $.session.measure({
       context: { tokens: 5_000, window: 200_000, percent: 2 },
@@ -236,7 +269,7 @@ describe('band', () => {
     const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 70, rows: 40 } })
     expect((await ui.findAll({ type: 'Button' })).length).toBe(0)
     await ui.unmount()
-    expect(await line($, 70)).toBe('ctx 2% · 5h 31% · 7d 92%')
+    expect(await line($, 70)).toBe('ctx 2%  5h 31%  7d 92%')
   })
 
   test('desktop: the row under the prompt is the engine\'s own', async ($, on) => {
@@ -331,7 +364,7 @@ describe('band', () => {
       $.session.measure({ context: { tokens: 5_000, window: 200_000, percent: 2 }, rateLimits, changed: ['context', 'rateLimits'] } as never)
     await measure([{ kind: 'five_hour', percentUsed: 31 }, { kind: 'seven_day', percentUsed: 12 }])
     await measure([])
-    expect(await line($, 150)).toContain('5h 31% · 7d 12%')
+    expect(await line($, 150)).toContain('5h 31%  7d 12%')
     const { text } = await draw($, 150)
     expect(text).toContain('5H')
     expect(text).toContain('31%')
@@ -344,23 +377,23 @@ describe('band', () => {
     await $.session.measure({
       context: { tokens: 5_000, window: 200_000, percent: 2 },
       rateLimits: [
-        { kind: 'five_hour', percentUsed: 62, resetsAt: at(80) },
+        { kind: 'five_hour', percentUsed: 80, resetsAt: at(80) },
         { kind: 'seven_day', percentUsed: 12, resetsAt: at(3 * 24 * 60 + 4 * 60) },
       ],
       changed: ['context', 'rateLimits'],
     } as never)
     let row = await line($, 160)
-    expect(row).toContain('5h 62% ↻ 1:20 → ')
-    expect(row).toContain(' · 7d 12% · ')
+    expect(row).toContain('5h 80% resets in 1:20 at ')
+    expect(row.endsWith('  7d 12%')).toBe(true)
     expect(row).not.toContain('76:00')
     const desktop = (await draw($, 160)).text
     expect(desktop).toContain('↻ 1:20')
     expect(desktop).not.toContain('76:00')
     await clock.advance(60 * 60_000)
     row = await line($, 160)
-    expect(row).toContain('5h 62% ↻ 0:20 → ')
+    expect(row).toContain('5h 80% resets in 0:20 at ')
     await clock.advance(30 * 60_000)
-    expect(await line($, 160)).toContain('5h 62% · 7d')
+    expect(await line($, 160)).toContain('5h 80%  7d')
   })
 
   test('yields the band to a survey', async ($, on) => {

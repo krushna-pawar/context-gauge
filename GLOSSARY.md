@@ -12,10 +12,12 @@
   tail. In the footer only the context has a bar.
 - **Fill**: how much of a gauge's bar is filled, in percent (at least 2% for any use).
 - **Tail**: what follows a gauge's percentage: the token count for CTX, the reset countdown for 5H.
-- **Reset**: when the 5-hour window starts over. The footer says it twice: the **countdown**
-  (`↻ 1:20`) and the **clock** time (`→ 3:40pm`).
-- **Level**: how loud a footer reading is: calm (under 75%, grey), warm (from 75%, plain, its
-  percentage bold) or critical (from 90%, its percentage red).
+- **Reset**: when the 5-hour window starts over. From the notice level the footer says it twice:
+  the **countdown** (`resets in 1:20`) and the **clock** time (`at 3:40pm`).
+- **Level**: how loud a footer reading is: calm (grey), notice (from 75%: plain, its percentage
+  bold) or alert (from 95%: its percentage Claude orange). Both thresholds are settings.
+- **Hint**: Claude Code's own text at the left of the footer's row: the permission mode and a
+  shortcut or two. The footer keeps clear of it.
 - **Fit**: how much survives at a width, tried roomiest first. The card's fits choose the gap,
   token count, countdown and bars; the footer's choose the model, bar, clock, countdown, effort
-  and how many gauges.
+  and how many gauges, within what the person's settings allow.
