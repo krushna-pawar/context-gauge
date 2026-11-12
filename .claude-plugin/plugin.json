@@ -1,6 +1,6 @@
 {
   "name": "context-gauge",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Model, context window and 5h/7d usage beside the Claude Code prompt: one quiet line under it in the terminal, a card above it on the desktop.",
   "types": "./types/index.d.ts",
   "author": {

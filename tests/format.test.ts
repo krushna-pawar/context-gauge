@@ -108,7 +108,7 @@ describe('footer', () => {
     expect(text(week, 200)).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 10%  7d 99%')
   })
 
-  test('narrowing drops the reset\'s time of day, the model, the bar, the countdown, then 7d, then everything', () => {
+  test('narrowing drops the reset\'s time of day, the model, the bar, the countdown, 7d, then 5h, then everything', () => {
     const steps = [
       `OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52 at ${clock}  7d 45%`,
       'OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%',
@@ -116,6 +116,7 @@ describe('footer', () => {
       'ctx 5%  5h 78% resets in 0:52  7d 45%',
       'ctx 5%  5h 78%  7d 45%',
       'ctx 5%  5h 78%',
+      'ctx 5%',
     ]
     steps.forEach((want, i) => {
       expect(text(FILLING, want.length)).toBe(want)
@@ -176,6 +177,7 @@ describe('footer', () => {
     const moved = segs(CALM, { noticeAt: 50, alertAt: 60 })
     expect(moved.find(s => s.text === '62%')).toEqual({ text: '62%', tone: 'accent', bold: true })
     expect(moved.find(s => s.text === '45%')?.tone).toBe('muted')
+    expect(text(CALM, 200, { week: false, model: false })).toBe('ctx ━━━━━━ 5%  5h 62%')
   })
 
   test('missing data shows a dash, never a guess', () => {

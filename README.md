@@ -62,7 +62,8 @@ Run `/config` and look for context-gauge. All of these are for the terminal line
 ## Narrow windows
 
 The terminal line never wraps and keeps clear of Claude Code's hint. As the window narrows it
-drops the reset's time of day first, then the model, then the bar, then the countdown, then 7d:
+drops the reset's time of day first, then the model, then the bar, then the countdown, then 7d,
+then 5h:
 
 ```
 OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52 at 3:40pm  7d 45%
@@ -71,6 +72,7 @@ ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%
 ctx 5%  5h 78% resets in 0:52  7d 45%
 ctx 5%  5h 78%  7d 45%
 ctx 5%  5h 78%
+ctx 5%
 ```
 
 Narrower still, the row is left to Claude Code.

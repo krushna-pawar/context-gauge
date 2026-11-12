@@ -42,9 +42,12 @@ const NOW = Date.parse('2026-10-17T12:00:00Z')
 
 // The slash commands the engine was asked to run, in order; emptied by each engine().
 const ran: string[] = []
+// While true, /model fails, as it does past a host's limit.
+let busy = false
 
 const engine = (on: On, settings: Record<string, unknown> = {}) => {
   ran.length = 0
+  busy = false
   const clock = mock.clock(on, { now: NOW })
   on('settings.read', () => ({ value: { ...settings } }))
   on('command.run', { command: 'effort' }, (_$, e) => {
@@ -72,6 +75,7 @@ const engine = (on: On, settings: Record<string, unknown> = {}) => {
   })
   // The pickers /model and /effort open: the test only needs to see them asked for.
   on('command.run', { command: 'model' }, (_$, e) => {
+    if (busy) throw new Error('busy')
     ran.push(`/${e.command}`)
     return { text: '' }
   })
@@ -218,6 +222,7 @@ describe('band', () => {
       expect(text.startsWith('engine:')).toBe(false)
       expect(text.length <= columns - RESERVE).toBe(true)
     }
+    expect(await line($, 52)).toBe('ctx —')
     expect(await line($, 46)).toBe('engine:')
     expect(await line($, 46, ['focus'])).toBe('engine:focus')
   })
@@ -247,6 +252,33 @@ describe('band', () => {
     await ui.press({ key: 'model' })
     expect(ran).toEqual(['/model'])
     await ui.unmount()
+  })
+
+  test('terminal: a threshold out of range is clamped, and the notice never sits above the alert', { options: { noticeAt: 99, alertAt: 80 } }, async ($, on) => {
+    engine(on)
+    await $.session.measure({
+      context: { tokens: 5_000, window: 200_000, percent: 2 },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 85 }, { kind: 'seven_day', percentUsed: 79 }],
+      changed: ['context', 'rateLimits'],
+    } as never)
+    const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 150, rows: 40 } })
+    expect((await ui.find({ type: 'Text', text: /^85%$/ }))?.props?.color).toBe('claude')
+    expect((await ui.find({ type: 'Text', text: /^79%$/ }))?.props?.color).toBe('inactive')
+    await ui.unmount()
+  })
+
+  test('terminal: a click that cannot open the picker says so', async ($, on) => {
+    engine(on)
+    const toasts: string[] = []
+    on('ui.toast', (_$, e) => {
+      toasts.push(e.text)
+      return { value: undefined }
+    })
+    busy = true
+    const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 150, rows: 40 } })
+    await ui.press({ key: 'model' })
+    await ui.unmount()
+    expect(toasts).toEqual(["Couldn't open the picker. Type /model instead."])
   })
 
   test('terminal: with the effort turned on, a click on it opens its picker too', { options: { showEffort: true } }, async ($, on) => {

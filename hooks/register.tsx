@@ -51,18 +51,16 @@ const noteMode = async ($: EngineInterface, e: { agent_id?: string; permission_m
 let tick: Timer | undefined
 
 export const register: Register = (on, options) => {
-  const flag = (key: string, fallback: boolean) => (typeof options?.[key] === 'boolean' ? (options[key] as boolean) : fallback)
-  const percent = (key: string, fallback: number) => {
-    const v = options?.[key]
-    return typeof v === 'number' && v >= 0 && v <= 100 ? v : fallback
-  }
+  // The engine fills in the manifest's defaults; only a threshold's range is left to check.
+  const percent = (v: unknown, fallback: number) => (typeof v === 'number' ? Math.min(100, Math.max(0, v)) : fallback)
+  const alertAt = percent(options?.alertAt, FOOTER_DEFAULTS.alertAt)
   const shown: FooterOptions = {
-    model: flag('showModel', FOOTER_DEFAULTS.model),
-    effort: flag('showEffort', FOOTER_DEFAULTS.effort),
-    week: flag('showWeek', FOOTER_DEFAULTS.week),
-    clock: flag('showResetClock', FOOTER_DEFAULTS.clock),
-    noticeAt: percent('noticeAt', FOOTER_DEFAULTS.noticeAt),
-    alertAt: percent('alertAt', FOOTER_DEFAULTS.alertAt),
+    model: options?.showModel !== false,
+    effort: options?.showEffort === true,
+    week: options?.showWeek !== false,
+    clock: options?.showResetClock !== false,
+    noticeAt: Math.min(percent(options?.noticeAt, FOOTER_DEFAULTS.noticeAt), alertAt),
+    alertAt,
   }
 
   on('session.start', async ($, e, next) => {
@@ -133,7 +131,7 @@ export const register: Register = (on, options) => {
           ))
           // A click opens Claude Code's own picker, as /model and /effort do.
           return press ? (
-            <Button key={press} plain onPress={() => void $.command.run({ command: press, args: '' }).catch(() => {})}>
+            <Button key={press} plain onPress={() => void $.command.run({ command: press, args: '' }).catch(() => $.ui.toast(`Couldn't open the picker. Type /${press} instead.`))}>
               {spans}
             </Button>
           ) : (

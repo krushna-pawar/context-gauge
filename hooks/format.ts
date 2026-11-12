@@ -154,13 +154,13 @@ function reading(label: string, pct: number | null, o: FooterOptions, width = 0)
 }
 
 // The footer after `drop` steps of narrowing: the reset's time of day goes first, then the model,
-// the bar and the effort, the countdown, and 7d.
+// the bar and the effort, the countdown, 7d, and 5h.
 function footerAt(s: CardInput, drop: number, o: FooterOptions, now: number | undefined, hour12: boolean): Row[] {
   const parts: Row[] = []
   // Orange marks what a click acts on.
   if (drop < 2 && o.model) parts.push([{ text: model(s), tone: s.model === null ? 'muted' : 'accent', press: 'model' }])
   parts.push(reading('ctx', s.ctxPercent, o, drop < 3 ? 6 : 0))
-  WINDOWS.slice(0, o.week && drop < 5 ? 2 : 1).forEach(({ kind, label }, i) => {
+  WINDOWS.slice(0, drop > 5 ? 0 : o.week && drop < 5 ? 2 : 1).forEach(({ kind, label }, i) => {
     const limit = limitOf(s, kind)
     const pct = limit?.percentUsed ?? null
     const part = reading(label.toLowerCase(), pct, o)
@@ -178,7 +178,7 @@ function footerAt(s: CardInput, drop: number, o: FooterOptions, now: number | un
 
 // The roomiest footer that fits `room` cells, as groups drawn two cells apart, or nothing.
 export function footer(s: CardInput, room: number, now?: number, o = FOOTER_DEFAULTS, hour12 = HOUR12): Row[] {
-  for (let drop = 0; drop < 6; drop++) {
+  for (let drop = 0; drop < 7; drop++) {
     const groups = footerAt(s, drop, o, now, hour12)
     if (groups.map(rowText).join('  ').length <= room) return groups
   }
