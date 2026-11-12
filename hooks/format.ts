@@ -24,7 +24,6 @@ export function fmtTokens(n: number): string {
   return `${k >= 100 ? Math.round(k) : Math.round(k * 10) / 10}k`
 }
 
-// `claude-opus-5-5[1m]` → `Opus 5.5`; anything spelled otherwise is shown as given.
 export function fmtModel(id: string): string {
   const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(id)
   if (!m) return id
@@ -34,7 +33,6 @@ export function fmtModel(id: string): string {
 
 export const fmtMode = (mode: string | null) => (mode === null ? DASH : (MODES[mode] ?? mode))
 
-// Hours:minutes until an ISO timestamp, rounded up to the minute; null once past.
 export function fmtIn(iso: string, now: number): string | null {
   const ms = Date.parse(iso) - now
   if (!(ms > 0)) return null
@@ -58,7 +56,6 @@ export function fmtClock(iso: string, hour12 = HOUR12): string | null {
   return hour12 ? `${h % 12 || 12}:${m}${h < 12 ? 'am' : 'pm'}` : `${String(h).padStart(2, '0')}:${m}`
 }
 
-// Any use fills at least 2% of a strip, or one cell of a bar, so 4% never reads as empty.
 const fillPct = (pct: number | null) => (pct === null || pct <= 0 ? 0 : Math.min(100, Math.max(2, pct)))
 
 export function bar(pct: number | null, width: number): Seg[] {
@@ -70,7 +67,6 @@ export function bar(pct: number | null, width: number): Seg[] {
 const limitOf = (s: CardInput, kind: string) => s.limits.find(l => l.kind === kind)
 const model = (s: CardInput) => (s.model === null ? DASH : fmtModel(s.model).toUpperCase())
 
-// ---- The card: desktop, VS Code and mobile ----
 
 const pctSeg = (pct: number | null): Seg => (pct === null ? dash : seg(`${Math.floor(pct)}%`, pct >= 90 ? 'critical' : 'text'))
 const upper = (v: string | null): Seg => (v === null ? dash : { text: v.toUpperCase(), tone: 'accent', bold: true })
@@ -96,7 +92,6 @@ function gauges(s: CardInput, fit: Fit, now?: number) {
     ctx,
     ...WINDOWS.map(({ kind, label }, i) => {
       const limit = limitOf(s, kind)
-      // Only the 5-hour window says when it resets.
       const resets = i === 0 && fit.resets && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
       return { label, pct: limit?.percentUsed ?? null, tail: resets === null ? [] : [seg(`↻ ${resets}`, 'muted')] }
     }),
@@ -108,7 +103,6 @@ const ends = (s: CardInput): { left: Seg; right: Row } => ({
   right: [upper(s.effort), seg(' / ', 'muted'), upper(s.mode === null ? null : fmtMode(s.mode))],
 })
 
-// Whether the rail fits `inner` cells at this fit, every bar at least MIN_BAR long.
 function fits(s: CardInput, inner: number, fit: Fit, now?: number): boolean {
   const { left, right } = ends(s)
   const sep = 2 * fit.gap + 1
@@ -120,7 +114,6 @@ function fits(s: CardInput, inner: number, fit: Fit, now?: number): boolean {
   }, left.text.length + sep + rowText(right).length)
   const free = inner - text
   if (!fit.bars) return free >= 0
-  // Context takes 40% of the free cells; the 5h and 7d bars share the rest.
   const ctx = Math.round(free * 0.4)
   return Math.min(ctx, Math.floor((free - ctx) / 2)) >= MIN_BAR
 }
@@ -140,12 +133,10 @@ export function rail(s: CardInput, columns: number, now?: number) {
   }
 }
 
-// ---- The footer: the terminal's line under the prompt ----
 
 export type FooterOptions = { model: boolean; effort: boolean; week: boolean; clock: boolean; noticeAt: number; alertAt: number }
 export const FOOTER_DEFAULTS: FooterOptions = { model: true, effort: false, week: true, clock: true, noticeAt: 75, alertAt: 95 }
 
-// A reading is grey below `noticeAt`; from there its percentage is bold, and orange from `alertAt`.
 function reading(label: string, pct: number | null, o: FooterOptions, width = 0): Row {
   const text = pct === null ? DASH : `${Math.floor(pct)}%`
   const strip = width ? [...bar(pct, width), seg(' ', 'muted')] : []
@@ -157,14 +148,12 @@ function reading(label: string, pct: number | null, o: FooterOptions, width = 0)
 // the bar and the effort, the countdown, 7d, and 5h.
 function footerAt(s: CardInput, drop: number, o: FooterOptions, now: number | undefined, hour12: boolean): Row[] {
   const parts: Row[] = []
-  // Orange marks what a click acts on.
   if (drop < 2 && o.model) parts.push([{ text: model(s), tone: s.model === null ? 'muted' : 'accent', press: 'model' }])
   parts.push(reading('ctx', s.ctxPercent, o, drop < 3 ? 6 : 0))
   WINDOWS.slice(0, drop > 5 ? 0 : o.week && drop < 5 ? 2 : 1).forEach(({ kind, label }, i) => {
     const limit = limitOf(s, kind)
     const pct = limit?.percentUsed ?? null
     const part = reading(label.toLowerCase(), pct, o)
-    // 5h says when it resets only once it is filling up.
     const left = i === 0 && drop < 4 && pct !== null && pct >= o.noticeAt && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
     if (left !== null) {
       const at = drop < 1 && o.clock ? fmtClock(limit!.resetsAt!, hour12) : null
@@ -176,7 +165,6 @@ function footerAt(s: CardInput, drop: number, o: FooterOptions, now: number | un
   return parts
 }
 
-// The roomiest footer that fits `room` cells, as groups drawn two cells apart, or nothing.
 export function footer(s: CardInput, room: number, now?: number, o = FOOTER_DEFAULTS, hour12 = HOUR12): Row[] {
   for (let drop = 0; drop < 7; drop++) {
     const groups = footerAt(s, drop, o, now, hour12)

@@ -4,7 +4,6 @@ import type { EngineInterface, Register, SessionUsage, Timer } from 'claude-code
 import type { Snap } from '../types'
 import { footer, FOOTER_DEFAULTS, rail, type FooterOptions, type Row, type Seg, type Tone } from './format'
 
-// Theme keys, not fixed colors, so the gauges read on light themes as well as dark ones.
 const COLORS: Record<Tone, string> = { text: 'text', muted: 'inactive', accent: 'claude', critical: 'error', track: 'subtle' }
 
 // The footer shares its row with Claude Code's own hint, whose length the engine does not report.
@@ -30,7 +29,6 @@ const fromUsage = (u: Pick<SessionUsage, 'context' | 'rateLimits'>): Partial<Sna
 const model = ($: EngineInterface) => $.session.model().catch(() => null)
 const settings = ($: EngineInterface) => $.settings.read().catch(() => null)
 
-// What settings.json may hold: `max` is session-only and never written there.
 const EFFORTS = ['low', 'medium', 'high', 'xhigh']
 const MODES = ['default', 'acceptEdits', 'bypassPermissions', 'plan', 'dontAsk', 'auto', 'delegate']
 
@@ -43,7 +41,6 @@ function modeIn(s: Record<string, unknown> | null): string | null {
   return typeof m === 'string' && MODES.includes(m) ? m : null
 }
 
-// Main thread only: a subagent's payload carries its own agent_id.
 const noteMode = async ($: EngineInterface, e: { agent_id?: string; permission_mode?: string }) => {
   if (e.agent_id === undefined && e.permission_mode) await patch($, { mode: e.permission_mode })
 }
@@ -51,7 +48,6 @@ const noteMode = async ($: EngineInterface, e: { agent_id?: string; permission_m
 let tick: Timer | undefined
 
 export const register: Register = (on, options) => {
-  // The engine fills in the manifest's defaults; only a threshold's range is left to check.
   const percent = (v: unknown, fallback: number) => (typeof v === 'number' ? Math.min(100, Math.max(0, v)) : fallback)
   const alertAt = percent(options?.alertAt, FOOTER_DEFAULTS.alertAt)
   const shown: FooterOptions = {
@@ -64,10 +60,8 @@ export const register: Register = (on, options) => {
   }
 
   on('session.start', async ($, e, next) => {
-    // Once a minute, so the reset countdown stays current.
     tick ??= $.clock.every(60_000, () => $.ui.invalidate('ui.render'))
     const [name, usage, set] = await Promise.all([model($), $.session.usage().catch(() => null), settings($)])
-    // Settings only seed what nothing has reported yet.
     await update($, snap, s => {
       const was = { ...EMPTY, ...s }
       return { ...was, model: name, ...(usage ? fromUsage(usage) : {}), effort: was.effort ?? effortIn(set), mode: was.mode ?? modeIn(set) }
@@ -104,13 +98,11 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // Permission mode rides the classic hook payloads; no event fires on Shift+Tab itself.
   on('classic.SessionStart', async ($, e, next) => (await noteMode($, e), next(e)))
   on('classic.UserPromptSubmit', async ($, e, next) => (await noteMode($, e), next(e)))
   on('classic.PostToolUse', async ($, e, next) => (await noteMode($, e), next(e)))
   on('classic.Stop', async ($, e, next) => (await noteMode($, e), next(e)))
 
-  // The terminal: the gauges at the right of the row under the prompt, before the engine's own mode labels.
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     if (e.surface !== 'terminal') return next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
@@ -129,7 +121,6 @@ export const register: Register = (on, options) => {
               {p.text}
             </Text>
           ))
-          // A click opens Claude Code's own picker, as /model and /effort do.
           return press ? (
             <Button key={press} plain onPress={() => void $.command.run({ command: press, args: '' }).catch(() => $.ui.toast(`Couldn't open the picker. Type /${press} instead.`))}>
               {spans}
@@ -142,7 +133,6 @@ export const register: Register = (on, options) => {
     )
   })
 
-  // Every other surface: the card above the prompt.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey || e.surface === 'terminal') return next(e)
     const { Box, Text } = $.ui.resolve(e)
@@ -176,7 +166,6 @@ export const register: Register = (on, options) => {
     const box = { borderStyle: 'round', borderColor: 'claude', paddingX: r.paddingX, marginTop: 1 } as const
     const left = <Box flexShrink={0}>{span(r.left)}</Box>
     const right = <Box flexShrink={0}>{spans(r.right)}</Box>
-    // The card picks its own rows: the desktop's wrapping broke a line with room to spare.
     if (r.stacked) {
       return (
         <Box {...box} flexDirection="column">
