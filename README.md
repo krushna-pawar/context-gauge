@@ -17,7 +17,7 @@ no rows.
 
 Both show:
 
-- **Model** in use. In the terminal, click it to open Claude Code's model picker, the one `/model`
+- **Model** in use. In the terminal it is Claude orange, which marks what you can click: click it to open Claude Code's model picker, the one `/model`
   opens; the effort slider is in there too
 - **ctx**: how full the context window is, as a bar and a percentage (the card adds tokens used /
   window size)
@@ -30,7 +30,7 @@ Colors follow your Claude Code theme, so the gauges read on light themes as well
 
 ## Quiet until it matters
 
-In the terminal everything is as grey as Claude Code's own hints, so it stays out of the way:
+In the terminal the readings are as grey as Claude Code's own hints, so they stay out of the way:
 
 ```
 OPUS 5.5  ctx ━━━━━━ 5%  5h 62%  7d 45%                            under 75%: grey

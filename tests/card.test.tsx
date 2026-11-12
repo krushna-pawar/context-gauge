@@ -34,7 +34,7 @@ const line = async ($: Engine, columns: number, modes: string[] = [], surface: '
 }
 
 // The cells the footer leaves for the engine's hint at its left, before the mode is known.
-const RESERVE = 43
+const RESERVE = 45
 
 // What the engine itself answers beneath the plugin, for the events this test raises.
 // `settings` stands for the merged settings.json; `/effort` writes into it as it runs.
@@ -218,26 +218,26 @@ describe('band', () => {
       expect(text.startsWith('engine:')).toBe(false)
       expect(text.length <= columns - RESERVE).toBe(true)
     }
-    expect(await line($, 44)).toBe('engine:')
-    expect(await line($, 44, ['focus'])).toBe('engine:focus')
+    expect(await line($, 46)).toBe('engine:')
+    expect(await line($, 46, ['focus'])).toBe('engine:focus')
   })
 
   test('terminal: the engine\'s own mode labels follow the gauges', async ($, on) => {
     engine(on)
     expect(await line($, 150, ['focus', 'memory paused'])).toBe('—  ctx ━━━━━━ —  5h —  7d —  focus & memory paused')
     // They take their share of the room: without them this width keeps every gauge.
-    expect(await line($, 80)).toBe('—  ctx ━━━━━━ —  5h —  7d —')
-    expect(await line($, 80, ['focus', 'memory paused'])).toBe('ctx —  5h —  focus & memory paused')
+    expect(await line($, 82)).toBe('—  ctx ━━━━━━ —  5h —  7d —')
+    expect(await line($, 82, ['focus', 'memory paused'])).toBe('ctx —  5h —  focus & memory paused')
   })
 
   test('terminal: the room left for the engine\'s hint follows the permission mode', async ($, on) => {
     engine(on)
     // Unknown mode: the model does not fit beside the longest common hint.
-    expect(await line($, 67)).toBe('ctx ━━━━━━ —  5h —  7d —')
+    expect(await line($, 69)).toBe('ctx ━━━━━━ —  5h —  7d —')
     await $.classic.UserPromptSubmit({ prompt: 'hi', permission_mode: 'default' } as never)
-    expect(await line($, 67)).toBe('—  ctx ━━━━━━ —  5h —  7d —')
+    expect(await line($, 69)).toBe('—  ctx ━━━━━━ —  5h —  7d —')
     await $.classic.UserPromptSubmit({ prompt: 'hi', permission_mode: 'bypassPermissions' } as never)
-    expect(await line($, 67)).toBe('ctx —  5h —  7d —')
+    expect(await line($, 69)).toBe('ctx —  5h —  7d —')
   })
 
   test('terminal: a click on the model opens its picker, as /model does', async ($, on) => {
@@ -266,10 +266,10 @@ describe('band', () => {
       rateLimits: [{ kind: 'five_hour', percentUsed: 31 }, { kind: 'seven_day', percentUsed: 92 }],
       changed: ['context', 'rateLimits'],
     } as never)
-    const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 70, rows: 40 } })
+    const ui = await $.ui.mount({ plugin: 'context-gauge', surface: 'terminal', component: 'SessionMode', props: { modes: [] }, viewport: { columns: 72, rows: 40 } })
     expect((await ui.findAll({ type: 'Button' })).length).toBe(0)
     await ui.unmount()
-    expect(await line($, 70)).toBe('ctx 2%  5h 31%  7d 92%')
+    expect(await line($, 72)).toBe('ctx 2%  5h 31%  7d 92%')
   })
 
   test('desktop: the row under the prompt is the engine\'s own', async ($, on) => {

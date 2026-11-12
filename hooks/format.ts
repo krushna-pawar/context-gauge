@@ -283,8 +283,8 @@ const FOOTER_FITS: FooterFit[] = [
 
 function footerAt(s: CardInput, fit: FooterFit, o: FooterOptions, now: number | undefined, hour12: boolean): Row {
   const parts: Row[] = []
-  // Grey and plain: the model is the part least likely to change.
-  if (fit.model && o.model) parts.push([{ text: ends(s).left.text, tone: 'muted', press: 'model' }])
+  // Claude orange marks what a click acts on: the model, and the effort where shown.
+  if (fit.model && o.model) parts.push([{ text: ends(s).left.text, tone: s.model === null ? 'muted' : 'accent', press: 'model' }])
   parts.push(reading('ctx', s.ctxPercent, o, fit.bar ? FOOTER_BAR : null))
   for (const { kind, label, countdown } of WINDOWS.slice(0, (o.week ? fit.gauges : Math.min(fit.gauges, 2)) - 1)) {
     const limit = s.limits.find(l => l.kind === kind)
@@ -299,7 +299,7 @@ function footerAt(s: CardInput, fit: FooterFit, o: FooterOptions, now: number | 
     }
     parts.push(part)
   }
-  if (fit.effort && o.effort) parts.push([{ ...(s.effort === null ? seg(DASH, 'muted') : seg(s.effort, 'muted')), press: 'effort' }])
+  if (fit.effort && o.effort) parts.push([{ ...(s.effort === null ? seg(DASH, 'muted') : seg(s.effort, 'accent')), press: 'effort' }])
   return parts.flatMap((part, i) => (i === 0 ? part : [seg(GAP, 'muted'), ...part]))
 }
 

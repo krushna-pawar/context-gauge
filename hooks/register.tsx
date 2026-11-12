@@ -26,6 +26,8 @@ const HINT_CELLS: Record<string, number> = { default: 37, acceptEdits: 41, plan:
 const HINT_CELLS_UNKNOWN = 41
 // The least room between the hint and the footer.
 const FOOTER_GAP = 2
+// The cells the engine keeps empty at the row's right edge, right of the footer.
+const FOOTER_EDGE = 2
 // The columns assumed where the terminal has not measured yet.
 const FOOTER_COLUMNS = 80
 
@@ -159,7 +161,7 @@ export const register: Register = (on, options) => {
     const s = await read($, snap)
     const modes = e.props.modes.join(' & ')
     const hint = (s?.mode ? HINT_CELLS[s.mode] : undefined) ?? HINT_CELLS_UNKNOWN
-    const room = (e.viewport?.columns ?? FOOTER_COLUMNS) - hint - FOOTER_GAP - (modes ? modes.length + 2 : 0)
+    const room = (e.viewport?.columns ?? FOOTER_COLUMNS) - hint - FOOTER_GAP - FOOTER_EDGE - (modes ? modes.length + 2 : 0)
     const row = footer({ ...EMPTY, ...s }, room, await $.clock.now(), shown)
     if (!row.length) return next(e)
 

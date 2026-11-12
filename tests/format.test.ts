@@ -137,13 +137,14 @@ describe('footer', () => {
     expect(text({ ...FILLING, limits: limits(78, -1) }, 200)).toContain('5h 78%  7d')
   })
 
-  test('quiet below 75%: everything is muted and plain, the model too', () => {
+  test('quiet below 75%: every reading is muted and plain; only what a click acts on is Claude orange', () => {
     const row = footer(CALM, 200, now, FOOTER_DEFAULTS, true)
-    for (const t of ['OPUS 5.5', 'ctx ', '5%', '5h ', '62%', '7d ', '45%']) expect(row.find(s => s.text === t)?.tone).toBe('muted')
+    for (const t of ['ctx ', '5%', '5h ', '62%', '7d ', '45%']) expect(row.find(s => s.text === t)?.tone).toBe('muted')
     expect(row.some(s => s.bold)).toBe(false)
     expect(row.find(s => /^━+$/.test(s.text))?.tone).toBe('accent')
     // A click on the model opens its picker.
-    expect(row[0]).toEqual({ text: 'OPUS 5.5', tone: 'muted', press: 'model' })
+    expect(row[0]).toEqual({ text: 'OPUS 5.5', tone: 'accent', press: 'model' })
+    expect(footer(EMPTY, 200, now, FOOTER_DEFAULTS, true)[0]).toEqual({ text: '—', tone: 'muted', press: 'model' })
     expect(row.filter(s => s.press).length).toBe(1)
   })
 
@@ -167,7 +168,7 @@ describe('footer', () => {
     expect(text(FILLING, 200, { clock: false })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%')
     expect(text(CALM, 200, { effort: true })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 62%  7d 45%  high')
     const effort = footer(CALM, 200, now, { ...FOOTER_DEFAULTS, effort: true }, true)
-    expect(effort[effort.length - 1]).toEqual({ text: 'high', tone: 'muted', press: 'effort' })
+    expect(effort[effort.length - 1]).toEqual({ text: 'high', tone: 'accent', press: 'effort' })
     expect(text(CALM, 200, { noticeAt: 50 })).toContain('5h 62% resets in 0:52')
     const moved = footer(CALM, 200, now, { ...FOOTER_DEFAULTS, noticeAt: 50, alertAt: 60 }, true)
     expect(moved.find(s => s.text === '62%')).toEqual({ text: '62%', tone: 'accent', bold: true })
