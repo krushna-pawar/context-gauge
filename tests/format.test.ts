@@ -181,10 +181,26 @@ describe('footer', () => {
     for (const row of [filling, near, full]) expect(row.some(s => s.tone === 'critical')).toBe(false)
   })
 
+  test('time only: the time of day stays as long as a countdown would, then goes', () => {
+    const steps = [
+      `OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets at ${clock}  7d 45%`,
+      `ctx ━━━━━━ 5%  5h 78% resets at ${clock}  7d 45%`,
+      `ctx 5%  5h 78% resets at ${clock}  7d 45%`,
+      'ctx 5%  5h 78%  7d 45%',
+    ]
+    steps.forEach((want, i) => {
+      expect(text(FILLING, want.length, { reset: 'time' })).toBe(want)
+      expect(text(FILLING, want.length - 1, { reset: 'time' })).toBe(steps[i + 1] ?? 'ctx 5%  5h 78%')
+    })
+  })
+
   test('settings: each part can be turned off, the effort on, and both thresholds moved', () => {
     expect(text(CALM, 200, { model: false })).toBe('ctx ━━━━━━ 5%  5h 62%  7d 45%')
     expect(text(CALM, 200, { week: false })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 62%')
-    expect(text(FILLING, 200, { clock: false })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%')
+    expect(text(FILLING, 200, { reset: 'countdown' })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets in 0:52  7d 45%')
+    expect(text(FILLING, 200, { reset: 'time' })).toBe(`OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets at ${clock}  7d 45%`)
+    expect(text(FILLING, 200, { reset: 'time', utc: true })).toBe(`OPUS 5.5  ctx ━━━━━━ 5%  5h 78% resets at ${clock} UTC  7d 45%`)
+    expect(segs(FILLING, { reset: 'time' }).find(s => s.text.startsWith(' resets'))).toEqual({ text: ` resets at ${clock}`, tone: 'muted' })
     expect(text(CALM, 200, { effort: true })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h 62%  7d 45%  high')
     const effort = segs(CALM, { effort: true })
     expect(effort[effort.length - 1]).toEqual({ text: 'high', tone: 'accent', press: 'effort' })

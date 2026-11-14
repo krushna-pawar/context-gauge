@@ -13,7 +13,7 @@
 - **Fill**: how much of a gauge's bar is filled, in percent (at least 2% for any use).
 - **Tail**: what follows a gauge's percentage: the token count for CTX, the reset countdown for 5H.
 - **Reset**: when the 5-hour window starts over. From the notice level the footer says it twice:
-  the **countdown** (`resets in 1:20`) and the **clock** time (`at 3:40pm`).
+  the **countdown** (`resets in 1:20`) and the **clock** time (`at 3:40pm`); a setting keeps either alone.
 - **Level**: how loud a footer reading is: calm (grey), notice (from 75%: plain, its percentage
   bold) or alert (from 95%: its percentage Claude orange). Both thresholds are settings.
 - **Hint**: Claude Code's own text at the left of the footer's row: the permission mode and a

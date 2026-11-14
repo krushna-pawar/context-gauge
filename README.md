@@ -48,19 +48,19 @@ On the card, percentages turn red at 90%.
 
 ## Settings
 
-Run `/config` and look for context-gauge. All of these are for the terminal line:
+Run `/config` and look for context-gauge. They all change the terminal line:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| Show the model | on | The model name, which opens the model picker on a click |
-| Show the effort | off | The effort level, which opens the effort picker on a click |
-| Show the 7-day limit | on | The 7d reading |
-| Always show the reset | off | 5h says when it resets at any level, not only from the notice level |
-| Show the reset's time of day | on | `at 3:40pm` after `resets in 0:52` |
-| Clock style | auto | 12-hour or 24-hour; auto follows the machine Claude Code runs on |
-| Time zone | empty | An IANA name such as `Asia/Kolkata`; empty uses the machine Claude Code runs on |
-| Notice from (%) | 75 | Where a reading turns bold and 5h says when it resets |
-| Alert from (%) | 95 | Where a reading turns Claude orange |
+| Show model name | on | Shown in orange; click it to switch models |
+| Show effort level | off | Click it to change effort |
+| Show weekly limit (7d) | on | How much of your weekly limit you've used |
+| 5h reset time format | in 0:52 at 3:40pm | Or `at 3:40pm`, or `in 0:52` |
+| Always show 5h reset time | off | Off: it appears only once 5h reaches the highlight level |
+| Clock format | auto | 12-hour (3:40pm) or 24-hour (15:40); auto follows your computer |
+| Time zone | empty | Empty uses your computer's; or a name such as `Asia/Kolkata` |
+| Highlight from (%) | 75 | Usage turns bold from here |
+| Warn from (%) | 95 | Usage turns orange from here |
 
 ## Narrow windows
 

@@ -58,11 +58,11 @@ export const register: Register = (on, options) => {
     model: options?.showModel !== false,
     effort: options?.showEffort === true,
     week: options?.showWeek !== false,
-    clock: options?.showResetClock !== false,
+    reset: options?.resetShows === 'at 3:40pm' ? 'time' : options?.resetShows === 'in 0:52' ? 'countdown' : 'both',
     resetAlways: options?.alwaysShowReset === true,
     noticeAt: Math.min(percent(options?.noticeAt, FOOTER_DEFAULTS.noticeAt), alertAt),
     alertAt,
-    hour12: options?.clockStyle === '12-hour' || (options?.clockStyle !== '24-hour' && FOOTER_DEFAULTS.hour12),
+    hour12: String(options?.clockStyle).startsWith('12') || (!String(options?.clockStyle).startsWith('24') && FOOTER_DEFAULTS.hour12),
     timeZone: typeof options?.timeZone === 'string' && isZone(options.timeZone.trim()) ? options.timeZone.trim() : '',
     utc: FOOTER_DEFAULTS.utc,
   }
