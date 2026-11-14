@@ -279,6 +279,16 @@ describe('band', () => {
     expect(await line($, 150)).toBe('—  ctx ━━━━━━ 2%  5h 18% resets in 1:20 at 18:50  7d 64%')
   })
 
+  test('terminal: the reset can read as a time of day only', { options: { alwaysShowReset: true, resetShows: 'time only', clockStyle: '24-hour', timeZone: 'Asia/Kolkata' } }, async ($, on) => {
+    engine(on)
+    await $.session.measure({
+      context: { tokens: 5_000, window: 200_000, percent: 2 },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 18, resetsAt: new Date(NOW + 80 * 60_000).toISOString() }, { kind: 'seven_day', percentUsed: 64 }],
+      changed: ['context', 'rateLimits'],
+    } as never)
+    expect(await line($, 150)).toBe('—  ctx ━━━━━━ 2%  5h 18% resets at 18:50  7d 64%')
+  })
+
   test('terminal: an unknown time zone falls back to the machine\'s', { options: { timeZone: 'Mars/Olympus', clockStyle: '12-hour' } }, async ($, on) => {
     engine(on)
     await $.session.measure({

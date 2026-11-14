@@ -155,7 +155,8 @@ export type FooterOptions = {
   model: boolean
   effort: boolean
   week: boolean
-  clock: boolean
+  // How the 5h reset reads: `resets in 0:52 at 3:40pm`, `resets at 3:40pm` or `resets in 0:52`.
+  reset: 'both' | 'time' | 'countdown'
   resetAlways: boolean
   noticeAt: number
   alertAt: number
@@ -163,7 +164,7 @@ export type FooterOptions = {
   timeZone: string
   utc: boolean
 }
-export const FOOTER_DEFAULTS: FooterOptions = { model: true, effort: false, week: true, clock: true, resetAlways: false, noticeAt: 75, alertAt: 95, timeZone: '', ...MACHINE }
+export const FOOTER_DEFAULTS: FooterOptions = { model: true, effort: false, week: true, reset: 'both', resetAlways: false, noticeAt: 75, alertAt: 95, timeZone: '', ...MACHINE }
 
 function reading(label: string, pct: number | null, o: FooterOptions, width = 0): Row {
   const text = pct === null ? DASH : `${Math.floor(pct)}%`
@@ -184,8 +185,10 @@ function footerAt(s: CardInput, drop: number, o: FooterOptions, now?: number): R
     const part = reading(label.toLowerCase(), pct, o)
     const left = i === 0 && drop < 4 && pct !== null && (o.resetAlways || pct >= o.noticeAt) && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
     if (left !== null) {
-      const at = drop < 1 && o.clock ? fmtClock(limit!.resetsAt!, o.hour12, o.timeZone) : null
-      part.push(seg(` resets in ${left}${at === null ? '' : ` at ${at}${o.utc && !o.timeZone ? ' UTC' : ''}`}`, 'muted'))
+      // Beside a countdown the time of day goes first as the row narrows; on its own it stays as long as a countdown would.
+      const at = o.reset !== 'countdown' && (drop < 1 || o.reset === 'time') ? fmtClock(limit!.resetsAt!, o.hour12, o.timeZone) : null
+      const words = [o.reset !== 'time' ? `in ${left}` : '', at === null ? '' : `at ${at}${o.utc && !o.timeZone ? ' UTC' : ''}`].filter(Boolean)
+      if (words.length) part.push(seg(` resets ${words.join(' ')}`, 'muted'))
     }
     parts.push(part)
   })

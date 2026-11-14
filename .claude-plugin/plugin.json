@@ -1,6 +1,6 @@
 {
   "name": "context-gauge",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Model, context window and 5h/7d usage beside the Claude Code prompt: one quiet line under it in the terminal, a card above it on the desktop.",
   "types": "./types/index.d.ts",
   "author": {
@@ -34,11 +34,16 @@
       "description": "Terminal line: say when the 5-hour limit resets at any level. Off, it shows only from the notice level.",
       "default": false
     },
-    "showResetClock": {
-      "type": "boolean",
-      "title": "Show the reset's time of day",
-      "description": "Terminal line: after how long until the 5-hour limit resets, also say at what time.",
-      "default": true
+    "resetShows": {
+      "type": "string",
+      "title": "Reset shows",
+      "description": "Terminal line: how the 5-hour reset reads. resets in 0:52 at 3:40pm, resets at 3:40pm, or resets in 0:52.",
+      "default": "countdown and time",
+      "options": [
+        "countdown and time",
+        "time only",
+        "countdown only"
+      ]
     },
     "noticeAt": {
       "type": "number",
