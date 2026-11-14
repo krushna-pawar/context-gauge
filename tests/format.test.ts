@@ -189,6 +189,10 @@ describe('footer', () => {
     const effort = segs(CALM, { effort: true })
     expect(effort[effort.length - 1]).toEqual({ text: 'high', tone: 'accent', press: 'effort' })
     expect(text(CALM, 200, { noticeAt: 50 })).toContain('5h 62% resets in 0:52')
+    // Always: the reset shows while the reading stays grey and plain.
+    expect(text(CALM, 200, { resetAlways: true })).toBe(`OPUS 5.5  ctx ━━━━━━ 5%  5h 62% resets in 0:52 at ${clock}  7d 45%`)
+    expect(segs(CALM, { resetAlways: true }).find(s => s.text === '62%')).toEqual({ text: '62%', tone: 'muted' })
+    expect(text({ ...CALM, limits: [] }, 200, { resetAlways: true })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h —  7d —')
     const moved = segs(CALM, { noticeAt: 50, alertAt: 60 })
     expect(moved.find(s => s.text === '62%')).toEqual({ text: '62%', tone: 'accent', bold: true })
     expect(moved.find(s => s.text === '45%')?.tone).toBe('muted')

@@ -1,6 +1,6 @@
 {
   "name": "context-gauge",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Model, context window and 5h/7d usage beside the Claude Code prompt: one quiet line under it in the terminal, a card above it on the desktop.",
   "types": "./types/index.d.ts",
   "author": {
@@ -27,6 +27,12 @@
       "title": "Show the 7-day limit",
       "description": "Terminal line: show how much of the 7-day limit is used.",
       "default": true
+    },
+    "alwaysShowReset": {
+      "type": "boolean",
+      "title": "Always show the reset",
+      "description": "Terminal line: say when the 5-hour limit resets at any level. Off, it shows only from the notice level.",
+      "default": false
     },
     "showResetClock": {
       "type": "boolean",
