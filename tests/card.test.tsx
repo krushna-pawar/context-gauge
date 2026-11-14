@@ -258,7 +258,7 @@ describe('band', () => {
     await ui.unmount()
   })
 
-  test('terminal: the reset in the time zone and clock style the person chose', { options: { timeZone: ' Asia/Kolkata ', clockStyle: '24-hour' } }, async ($, on) => {
+  test('terminal: the reset in the time zone and clock style the person chose', { options: { timeZone: ' Asia/Kolkata ', clockStyle: '24-hour (15:40)' } }, async ($, on) => {
     engine(on)
     await $.session.measure({
       context: { tokens: 5_000, window: 200_000, percent: 2 },
@@ -269,7 +269,7 @@ describe('band', () => {
     expect(await line($, 150)).toBe('—  ctx ━━━━━━ 2%  5h 80% resets in 1:20 at 18:50  7d —')
   })
 
-  test('terminal: with Always show the reset on, 5h says when it resets at any level', { options: { alwaysShowReset: true, clockStyle: '24-hour', timeZone: 'Asia/Kolkata' } }, async ($, on) => {
+  test('terminal: with Always show the reset on, 5h says when it resets at any level', { options: { alwaysShowReset: true, clockStyle: '24-hour (15:40)', timeZone: 'Asia/Kolkata' } }, async ($, on) => {
     engine(on)
     await $.session.measure({
       context: { tokens: 5_000, window: 200_000, percent: 2 },
@@ -279,7 +279,7 @@ describe('band', () => {
     expect(await line($, 150)).toBe('—  ctx ━━━━━━ 2%  5h 18% resets in 1:20 at 18:50  7d 64%')
   })
 
-  test('terminal: the reset can read as a time of day only', { options: { alwaysShowReset: true, resetShows: 'time only', clockStyle: '24-hour', timeZone: 'Asia/Kolkata' } }, async ($, on) => {
+  test('terminal: the reset can read as a time of day only', { options: { alwaysShowReset: true, resetShows: 'at 3:40pm', clockStyle: '24-hour (15:40)', timeZone: 'Asia/Kolkata' } }, async ($, on) => {
     engine(on)
     await $.session.measure({
       context: { tokens: 5_000, window: 200_000, percent: 2 },
@@ -289,7 +289,7 @@ describe('band', () => {
     expect(await line($, 150)).toBe('—  ctx ━━━━━━ 2%  5h 18% resets at 18:50  7d 64%')
   })
 
-  test('terminal: an unknown time zone falls back to the machine\'s', { options: { timeZone: 'Mars/Olympus', clockStyle: '12-hour' } }, async ($, on) => {
+  test('terminal: an unknown time zone falls back to the machine\'s', { options: { timeZone: 'Mars/Olympus', clockStyle: '12-hour (3:40pm)' } }, async ($, on) => {
     engine(on)
     await $.session.measure({
       context: { tokens: 5_000, window: 200_000, percent: 2 },

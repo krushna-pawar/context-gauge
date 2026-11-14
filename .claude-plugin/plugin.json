@@ -12,67 +12,67 @@
   "userConfig": {
     "showModel": {
       "type": "boolean",
-      "title": "Show the model",
-      "description": "Terminal line: show the model name. Click it to open the model picker.",
+      "title": "Show model name",
+      "description": "Shown in orange. Click it to switch models.",
       "default": true
     },
     "showEffort": {
       "type": "boolean",
-      "title": "Show the effort",
-      "description": "Terminal line: show the effort level. Click it to open the effort picker.",
+      "title": "Show effort level",
+      "description": "Click it to change effort.",
       "default": false
     },
     "showWeek": {
       "type": "boolean",
-      "title": "Show the 7-day limit",
-      "description": "Terminal line: show how much of the 7-day limit is used.",
+      "title": "Show weekly limit (7d)",
+      "description": "How much of your weekly limit you've used.",
       "default": true
-    },
-    "alwaysShowReset": {
-      "type": "boolean",
-      "title": "Always show the reset",
-      "description": "Terminal line: say when the 5-hour limit resets at any level. Off, it shows only from the notice level.",
-      "default": false
     },
     "resetShows": {
       "type": "string",
-      "title": "Reset shows",
-      "description": "Terminal line: how the 5-hour reset reads. resets in 0:52 at 3:40pm, resets at 3:40pm, or resets in 0:52.",
-      "default": "countdown and time",
+      "title": "5h reset time format",
+      "description": "How the time until your 5-hour limit resets is written.",
+      "default": "in 0:52 at 3:40pm",
       "options": [
-        "countdown and time",
-        "time only",
-        "countdown only"
+        "in 0:52 at 3:40pm",
+        "at 3:40pm",
+        "in 0:52"
       ]
     },
-    "noticeAt": {
-      "type": "number",
-      "title": "Notice from (%)",
-      "description": "Terminal line: from this percentage a reading turns from grey to bold, and 5h says when it resets.",
-      "default": 75
-    },
-    "alertAt": {
-      "type": "number",
-      "title": "Alert from (%)",
-      "description": "Terminal line: from this percentage a reading turns Claude orange.",
-      "default": 95
+    "alwaysShowReset": {
+      "type": "boolean",
+      "title": "Always show 5h reset time",
+      "description": "Off: it appears only once 5h reaches the highlight level.",
+      "default": false
     },
     "clockStyle": {
       "type": "string",
-      "title": "Clock style",
-      "description": "Terminal line: tell the reset's time of day on a 12-hour or 24-hour clock. Auto follows the machine Claude Code runs on.",
+      "title": "Clock format",
+      "description": "Auto follows your computer.",
       "default": "auto",
       "options": [
         "auto",
-        "12-hour",
-        "24-hour"
+        "12-hour (3:40pm)",
+        "24-hour (15:40)"
       ]
     },
     "timeZone": {
       "type": "string",
       "title": "Time zone",
-      "description": "Terminal line: the time zone for the reset's time of day, as an IANA name such as Asia/Kolkata. Leave empty to use the machine Claude Code runs on.",
+      "description": "Leave empty to use your computer's. Example: Asia/Kolkata",
       "default": ""
+    },
+    "noticeAt": {
+      "type": "number",
+      "title": "Highlight from (%)",
+      "description": "Usage turns bold from this percentage.",
+      "default": 75
+    },
+    "alertAt": {
+      "type": "number",
+      "title": "Warn from (%)",
+      "description": "Usage turns orange from this percentage.",
+      "default": 95
     }
   }
 }
