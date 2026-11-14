@@ -55,6 +55,7 @@ Run `/config` and look for context-gauge. All of these are for the terminal line
 | Show the model | on | The model name, which opens the model picker on a click |
 | Show the effort | off | The effort level, which opens the effort picker on a click |
 | Show the 7-day limit | on | The 7d reading |
+| Always show the reset | off | 5h says when it resets at any level, not only from the notice level |
 | Show the reset's time of day | on | `at 3:40pm` after `resets in 0:52` |
 | Clock style | auto | 12-hour or 24-hour; auto follows the machine Claude Code runs on |
 | Time zone | empty | An IANA name such as `Asia/Kolkata`; empty uses the machine Claude Code runs on |

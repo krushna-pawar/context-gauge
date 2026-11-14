@@ -59,6 +59,7 @@ export const register: Register = (on, options) => {
     effort: options?.showEffort === true,
     week: options?.showWeek !== false,
     clock: options?.showResetClock !== false,
+    resetAlways: options?.alwaysShowReset === true,
     noticeAt: Math.min(percent(options?.noticeAt, FOOTER_DEFAULTS.noticeAt), alertAt),
     alertAt,
     hour12: options?.clockStyle === '12-hour' || (options?.clockStyle !== '24-hour' && FOOTER_DEFAULTS.hour12),

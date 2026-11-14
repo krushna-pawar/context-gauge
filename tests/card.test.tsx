@@ -20,7 +20,11 @@ const draw = async ($: Engine, columns: number, extra = {}, surface: 'terminal' 
   const ui = await $.ui.mount({ plugin: 'context-gauge', surface, component: 'AbovePrompt', props: props(columns, extra) })
   const tree = await ui.drawn()
   await ui.unmount()
-  const box = tree as { type: string; props?: Record<string, unknown>; children?: RenderNode[] }
+  // Where another plugin draws in the band too, the engine stacks the trees: ours is the part we drew.
+  type El = { type: string; props?: Record<string, unknown>; children?: RenderNode[]; part?: { plugin: string } }
+  const ours = (el: El) => el.part?.plugin === 'context-gauge'
+  const whole = tree as El
+  const box = ours(whole) ? whole : (((whole.children ?? []) as El[]).find(ours) ?? whole)
   return { box, text: flat(box as RenderNode) }
 }
 
@@ -263,6 +267,16 @@ describe('band', () => {
     } as never)
     // NOW is 12:00 UTC: 80 minutes on is 18:50 in Kolkata.
     expect(await line($, 150)).toBe('—  ctx ━━━━━━ 2%  5h 80% resets in 1:20 at 18:50  7d —')
+  })
+
+  test('terminal: with Always show the reset on, 5h says when it resets at any level', { options: { alwaysShowReset: true, clockStyle: '24-hour', timeZone: 'Asia/Kolkata' } }, async ($, on) => {
+    engine(on)
+    await $.session.measure({
+      context: { tokens: 5_000, window: 200_000, percent: 2 },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 18, resetsAt: new Date(NOW + 80 * 60_000).toISOString() }, { kind: 'seven_day', percentUsed: 64 }],
+      changed: ['context', 'rateLimits'],
+    } as never)
+    expect(await line($, 150)).toBe('—  ctx ━━━━━━ 2%  5h 18% resets in 1:20 at 18:50  7d 64%')
   })
 
   test('terminal: an unknown time zone falls back to the machine\'s', { options: { timeZone: 'Mars/Olympus', clockStyle: '12-hour' } }, async ($, on) => {

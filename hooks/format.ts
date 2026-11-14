@@ -156,13 +156,14 @@ export type FooterOptions = {
   effort: boolean
   week: boolean
   clock: boolean
+  resetAlways: boolean
   noticeAt: number
   alertAt: number
   hour12: boolean
   timeZone: string
   utc: boolean
 }
-export const FOOTER_DEFAULTS: FooterOptions = { model: true, effort: false, week: true, clock: true, noticeAt: 75, alertAt: 95, timeZone: '', ...MACHINE }
+export const FOOTER_DEFAULTS: FooterOptions = { model: true, effort: false, week: true, clock: true, resetAlways: false, noticeAt: 75, alertAt: 95, timeZone: '', ...MACHINE }
 
 function reading(label: string, pct: number | null, o: FooterOptions, width = 0): Row {
   const text = pct === null ? DASH : `${Math.floor(pct)}%`
@@ -181,7 +182,7 @@ function footerAt(s: CardInput, drop: number, o: FooterOptions, now?: number): R
     const limit = limitOf(s, kind)
     const pct = limit?.percentUsed ?? null
     const part = reading(label.toLowerCase(), pct, o)
-    const left = i === 0 && drop < 4 && pct !== null && pct >= o.noticeAt && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
+    const left = i === 0 && drop < 4 && pct !== null && (o.resetAlways || pct >= o.noticeAt) && now !== undefined && limit?.resetsAt ? fmtIn(limit.resetsAt, now) : null
     if (left !== null) {
       const at = drop < 1 && o.clock ? fmtClock(limit!.resetsAt!, o.hour12, o.timeZone) : null
       part.push(seg(` resets in ${left}${at === null ? '' : ` at ${at}${o.utc && !o.timeZone ? ' UTC' : ''}`}`, 'muted'))
