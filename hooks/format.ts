@@ -164,7 +164,7 @@ export type FooterOptions = {
   timeZone: string
   utc: boolean
 }
-export const FOOTER_DEFAULTS: FooterOptions = { model: true, effort: false, week: true, reset: 'both', resetAlways: false, noticeAt: 75, alertAt: 95, timeZone: '', ...MACHINE }
+export const FOOTER_DEFAULTS: FooterOptions = { model: true, effort: false, week: true, reset: 'both', resetAlways: true, noticeAt: 75, alertAt: 95, timeZone: '', ...MACHINE }
 
 function reading(label: string, pct: number | null, o: FooterOptions, width = 0): Row {
   const text = pct === null ? DASH : `${Math.floor(pct)}%`

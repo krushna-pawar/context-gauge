@@ -43,7 +43,7 @@
       "type": "boolean",
       "title": "Always show 5h reset time",
       "description": "Off: it appears only once 5h reaches the highlight level.",
-      "default": false
+      "default": true
     },
     "clockStyle": {
       "type": "string",

@@ -56,7 +56,7 @@ Run `/config` and look for context-gauge. They all change the terminal line:
 | Show effort level | off | Click it to change effort |
 | Show weekly limit (7d) | on | How much of your weekly limit you've used |
 | 5h reset time format | in 0:52 at 3:40pm | Or `at 3:40pm`, or `in 0:52` |
-| Always show 5h reset time | off | Off: it appears only once 5h reaches the highlight level |
+| Always show 5h reset time | on | Off: it appears only once 5h reaches the highlight level |
 | Clock format | auto | 12-hour (3:40pm) or 24-hour (15:40); auto follows your computer |
 | Time zone | empty | Empty uses your computer's; or a name such as `Asia/Kolkata` |
 | Highlight from (%) | 75 | Usage turns bold from here |

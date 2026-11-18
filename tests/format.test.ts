@@ -94,7 +94,8 @@ describe('footer', () => {
   const FILLING: CardInput = { ...CALM, limits: limits(78) }
   const clock = fmtClock(at(52), true)!
   // A 12-hour clock in the machine's own zone, which is not UTC: what a person's laptop has.
-  const LOCAL: FooterOptions = { ...FOOTER_DEFAULTS, hour12: true, timeZone: '', utc: false }
+  // The reset shows only from the notice level here, so the thresholds can be tested; on by default.
+  const LOCAL: FooterOptions = { ...FOOTER_DEFAULTS, hour12: true, timeZone: '', utc: false, resetAlways: false }
   // The footer as drawn: its groups two cells apart; and as one flat row of segments.
   const drawn = (groups: Row[]) => groups.map(rowText).join('  ')
   const text = (input: CardInput, room: number, o: Partial<FooterOptions> = {}) => drawn(footer(input, room, now, { ...LOCAL, ...o }))
@@ -205,7 +206,8 @@ describe('footer', () => {
     const effort = segs(CALM, { effort: true })
     expect(effort[effort.length - 1]).toEqual({ text: 'high', tone: 'accent', press: 'effort' })
     expect(text(CALM, 200, { noticeAt: 50 })).toContain('5h 62% resets in 0:52')
-    // Always: the reset shows while the reading stays grey and plain.
+    // Always (the default): the reset shows while the reading stays grey and plain.
+    expect(FOOTER_DEFAULTS.resetAlways).toBe(true)
     expect(text(CALM, 200, { resetAlways: true })).toBe(`OPUS 5.5  ctx ━━━━━━ 5%  5h 62% resets in 0:52 at ${clock}  7d 45%`)
     expect(segs(CALM, { resetAlways: true }).find(s => s.text === '62%')).toEqual({ text: '62%', tone: 'muted' })
     expect(text({ ...CALM, limits: [] }, 200, { resetAlways: true })).toBe('OPUS 5.5  ctx ━━━━━━ 5%  5h —  7d —')

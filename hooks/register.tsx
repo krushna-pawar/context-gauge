@@ -59,7 +59,7 @@ export const register: Register = (on, options) => {
     effort: options?.showEffort === true,
     week: options?.showWeek !== false,
     reset: options?.resetShows === 'at 3:40pm' ? 'time' : options?.resetShows === 'in 0:52' ? 'countdown' : 'both',
-    resetAlways: options?.alwaysShowReset === true,
+    resetAlways: options?.alwaysShowReset !== false,
     noticeAt: Math.min(percent(options?.noticeAt, FOOTER_DEFAULTS.noticeAt), alertAt),
     alertAt,
     hour12: String(options?.clockStyle).startsWith('12') || (!String(options?.clockStyle).startsWith('24') && FOOTER_DEFAULTS.hour12),
@@ -106,10 +106,10 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  on('classic.SessionStart', async ($, e, next) => (await noteMode($, e), next(e)))
-  on('classic.UserPromptSubmit', async ($, e, next) => (await noteMode($, e), next(e)))
-  on('classic.PostToolUse', async ($, e, next) => (await noteMode($, e), next(e)))
-  on('classic.Stop', async ($, e, next) => (await noteMode($, e), next(e)))
+  on('classic.SessionStart', async ($, e, next) => (await noteMode($, e), next(e))).catch(($, e, next) => next(e))
+  on('classic.UserPromptSubmit', async ($, e, next) => (await noteMode($, e), next(e))).catch(($, e, next) => next(e))
+  on('classic.PostToolUse', async ($, e, next) => (await noteMode($, e), next(e))).catch(($, e, next) => next(e))
+  on('classic.Stop', async ($, e, next) => (await noteMode($, e), next(e))).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
     if (e.surface !== 'terminal') return next(e)
